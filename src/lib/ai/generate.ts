@@ -16,7 +16,7 @@ type OpenAIResponse = {
 
 export class AiConfigurationError extends Error {
   constructor() {
-    super("OPENAI_API_KEY가 설정되지 않았습니다. .env.local을 확인해 주세요.");
+    super("OPENAI_API_KEY가 설정되지 않았습니다. 서버 환경변수를 확인해 주세요.");
     this.name = "AiConfigurationError";
   }
 }

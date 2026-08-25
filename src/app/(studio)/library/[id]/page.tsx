@@ -5,6 +5,7 @@ import { GenerateButton } from "@/components/generate-button";
 import { LivePreviewEditor } from "@/components/live-preview-editor";
 import { PlatformBadge, StatusBadge } from "@/components/status-badge";
 import { SourceAnalysisPanel } from "@/components/source-analysis-panel";
+import { describeGenerationFailure } from "@/lib/ai/error-message";
 import { getBrandProfile, getContentById } from "@/lib/db/repository";
 import { formatDate, tagCategoryLabels } from "@/lib/format";
 import { outputTypeLabels } from "@/lib/content/types";
@@ -41,6 +42,7 @@ export default async function ContentDetailPage({
     : generated
       ? defaultGeneratedTab
       : "source";
+  const lastFailure = content.lastError ? describeGenerationFailure(content.lastError) : null;
 
   return (
     <>
@@ -59,7 +61,7 @@ export default async function ContentDetailPage({
         </div>
       </header>
 
-      {content.lastError && !generated ? <div className="mb-4 rounded-xl border border-[#efc9c3] bg-[#fff4f2] px-4 py-3 text-sm font-bold text-[#99453c]">최근 생성 오류: {content.lastError}</div> : null}
+      {lastFailure && !generated ? <div className="mb-4 rounded-xl border border-[#efc9c3] bg-[#fff4f2] px-4 py-3 text-sm font-bold text-[#99453c]"><p className="m-0 leading-6">최근 생성 오류: {lastFailure.message}</p>{lastFailure.actionUrl ? <a className="mt-2 inline-flex rounded-lg border border-[#efc9c3] bg-white px-3 py-2 text-xs underline" href={lastFailure.actionUrl} target="_blank" rel="noreferrer">OpenAI 결제 설정 열기</a> : null}</div> : null}
       <div className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-[#d9e4e1] bg-white p-1.5">
         {tabs.map((tab) => {
           const Icon = tab.icon;

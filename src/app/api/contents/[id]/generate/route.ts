@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { AiConfigurationError, getConfiguredModel } from "@/lib/ai/generate";
+import { describeGenerationFailure } from "@/lib/ai/error-message";
 import {
   generateInstagram,
   generateNaverKr,
@@ -56,12 +57,16 @@ export async function POST(
     }
     return NextResponse.json({ content: await getContentById(id), generatedOutputTypes: selected, coreResearchReused: core.reused });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "AI 콘텐츠 생성에 실패했습니다.";
-    await markGenerationError(id, message);
-    if (error instanceof AiConfigurationError) return NextResponse.json({ error: message }, { status: 503 });
-    if (error instanceof CopyrightGuardError || error instanceof InputError) return NextResponse.json({ error: message }, { status: 422 });
+    const failure = describeGenerationFailure(error);
+    await markGenerationError(id, failure.message);
+    if (error instanceof AiConfigurationError) return NextResponse.json({ error: failure.message, code: failure.code, actionUrl: failure.actionUrl }, { status: 503 });
+    if (error instanceof CopyrightGuardError || error instanceof InputError) return NextResponse.json({ error: failure.message }, { status: 422 });
     if (error instanceof SyntaxError) return NextResponse.json({ error: "요청 JSON 형식이 올바르지 않습니다." }, { status: 400 });
-    console.error("Failed to generate selected content", error);
-    return NextResponse.json({ error: message }, { status: 502 });
+    if (failure.code === "OPENAI_QUOTA_EXCEEDED" || failure.code === "OPENAI_RATE_LIMITED") {
+      console.warn("AI generation unavailable", { contentId: id, code: failure.code, status: failure.status });
+    } else {
+      console.error("Failed to generate selected content", error);
+    }
+    return NextResponse.json({ error: failure.message, code: failure.code, actionUrl: failure.actionUrl }, { status: failure.status });
   }
 }

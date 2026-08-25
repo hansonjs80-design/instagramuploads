@@ -18,20 +18,23 @@ export function GenerateButton({
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<OutputType[]>(initialOutputTypes);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<{ message: string; actionUrl?: string } | null>(null);
 
   async function generate(outputSelection: OutputType[]) {
-    if (!outputSelection.length) { setError("만들 콘텐츠를 하나 이상 선택해 주세요."); return; }
-    setBusy(true); setError("");
+    if (!outputSelection.length) { setError({ message: "만들 콘텐츠를 하나 이상 선택해 주세요." }); return; }
+    setBusy(true); setError(null);
     try {
       const response = await fetch(`/api/contents/${contentId}/generate`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ outputTypes: outputSelection }),
       });
-      const payload = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(payload.error || "생성에 실패했습니다.");
+      const payload = await response.json() as { error?: string; actionUrl?: string };
+      if (!response.ok) {
+        setError({ message: payload.error || "생성에 실패했습니다.", actionUrl: payload.actionUrl });
+        return;
+      }
       setOpen(false); router.refresh();
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "생성에 실패했습니다."); }
+    } catch (caught) { setError({ message: caught instanceof Error ? caught.message : "생성에 실패했습니다." }); }
     finally { setBusy(false); }
   }
 
@@ -46,6 +49,6 @@ export function GenerateButton({
       <div className="mt-3 space-y-2">{outputTypes.map((type) => <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-[#f5f8f7] p-3 text-xs font-bold" key={type}><input type="checkbox" checked={selected.includes(type)} onChange={() => toggle(type)} />{outputTypeLabels[type]}</label>)}</div>
       <div className="mt-3 flex gap-2"><button type="button" className="btn-secondary flex-1" disabled={busy} onClick={() => void generate([...outputTypes])}>모두 만들기</button><button type="button" className="btn-primary flex-1" disabled={busy || !selected.length} onClick={() => void generate(selected)}>선택 생성</button></div>
     </div> : null}
-    {error ? <p className="mt-2 max-w-sm text-xs font-bold text-[#a8453c]">{error}</p> : null}
+    {error ? <div className="mt-2 max-w-sm rounded-xl border border-[#efc9c3] bg-[#fff4f2] p-3 text-xs font-bold text-[#a8453c]"><p className="m-0 leading-5">{error.message}</p>{error.actionUrl ? <a className="mt-2 inline-flex rounded-lg bg-white px-3 py-2 text-[#8d3f37] underline" href={error.actionUrl} target="_blank" rel="noreferrer">OpenAI 결제 설정 열기</a> : null}</div> : null}
   </div>;
 }
