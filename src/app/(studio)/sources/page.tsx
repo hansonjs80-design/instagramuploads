@@ -8,8 +8,8 @@ import { formatDate } from "@/lib/format";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Sources" };
 
-export default function SourcesPage() {
-  const sources = listContents();
+export default async function SourcesPage() {
+  const sources = await listContents();
   return (
     <>
       <PageHeader eyebrow="Source registry" title="출처 관리" description="모든 생성 결과의 기준이 되는 제작자, 플랫폼, 원본 제목, URL과 등록일을 확인합니다." />

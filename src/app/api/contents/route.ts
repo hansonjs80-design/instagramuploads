@@ -5,13 +5,13 @@ import { InputError, parseCreateContentInput } from "@/lib/content/validation";
 export const runtime = "nodejs";
 
 export async function GET() {
-  return NextResponse.json({ contents: listContents() });
+  return NextResponse.json({ contents: await listContents() });
 }
 
 export async function POST(request: Request) {
   try {
     const input = parseCreateContentInput(await request.json());
-    const content = createContent(input);
+    const content = await createContent(input);
     return NextResponse.json({ content }, { status: 201 });
   } catch (error) {
     if (error instanceof InputError) {
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "요청 JSON 형식이 올바르지 않습니다." }, { status: 400 });
     }
     const message = error instanceof Error ? error.message : "콘텐츠 저장에 실패했습니다.";
-    if (message.includes("UNIQUE constraint failed: content_items.source_url")) {
+    if (message.includes("UNIQUE constraint failed: content_items.source_url") || message.includes("content_items_source_url_key")) {
       return NextResponse.json({ error: "이미 등록된 출처 URL입니다." }, { status: 409 });
     }
     console.error("Failed to create content", error);

@@ -7,8 +7,8 @@ import { listContents } from "@/lib/db/repository";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Instagram" };
 
-export default function InstagramPage() {
-  const contents = listContents({ generatedOnly: true });
+export default async function InstagramPage() {
+  const contents = await listContents({ generatedOnly: true });
   return (
     <>
       <PageHeader eyebrow="Live Preview" title="Instagram Studio" description="생성 완료 콘텐츠를 열어 4:5 카드의 문구, 브랜드 스타일, 이미지와 흐름을 실시간으로 편집하세요." />

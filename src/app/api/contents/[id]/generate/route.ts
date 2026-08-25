@@ -30,7 +30,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const content = getContentById(id);
+  const content = await getContentById(id);
   if (!content) return NextResponse.json({ error: "콘텐츠를 찾을 수 없습니다." }, { status: 404 });
 
   try {
@@ -39,7 +39,7 @@ export async function POST(
     const selected = parseOutputTypes(body.outputTypes, content.selectedOutputTypes);
     const model = getConfiguredModel();
     const core = await getOrCreateCoreResearch(content);
-    if (!core.reused) saveCoreResearch(id, core.result.analysis, core.result.suggestedTags, model);
+    if (!core.reused) await saveCoreResearch(id, core.result.analysis, core.result.suggestedTags, model);
 
     const generated = await Promise.all(selected.map(async (outputType): Promise<GeneratedResult> => {
       if (outputType === "NAVER_BLOG_KR") {
@@ -51,13 +51,13 @@ export async function POST(
     for (const output of generated) {
       assertTransformativeOutput(content.originalScript, output.data);
       assertSafeMedicalOutput(output.data);
-      if (output.outputType === "NAVER_BLOG_KR") saveNaverOutput(id, output.data, model);
-      else saveInstagramOutput(id, output.outputType, output.data, model);
+      if (output.outputType === "NAVER_BLOG_KR") await saveNaverOutput(id, output.data, model);
+      else await saveInstagramOutput(id, output.outputType, output.data, model);
     }
-    return NextResponse.json({ content: getContentById(id), generatedOutputTypes: selected, coreResearchReused: core.reused });
+    return NextResponse.json({ content: await getContentById(id), generatedOutputTypes: selected, coreResearchReused: core.reused });
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI 콘텐츠 생성에 실패했습니다.";
-    markGenerationError(id, message);
+    await markGenerationError(id, message);
     if (error instanceof AiConfigurationError) return NextResponse.json({ error: message }, { status: 503 });
     if (error instanceof CopyrightGuardError || error instanceof InputError) return NextResponse.json({ error: message }, { status: 422 });
     if (error instanceof SyntaxError) return NextResponse.json({ error: "요청 JSON 형식이 올바르지 않습니다." }, { status: 400 });

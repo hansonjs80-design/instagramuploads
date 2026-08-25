@@ -1,5 +1,11 @@
 export const SESSION_COOKIE = "ecs_owner_session";
 
+export function configuredAuthSubjects(environment: NodeJS.ProcessEnv = process.env): string[] {
+  return [environment.STUDIO_OWNER_EMAIL, environment.STUDIO_ADMIN_USERNAME]
+    .map((value) => value?.trim().toLowerCase())
+    .filter((value): value is string => Boolean(value));
+}
+
 function bytes(value: string): ArrayBuffer { return new TextEncoder().encode(value).buffer as ArrayBuffer; }
 function encode(value: ArrayBuffer): string { return Buffer.from(value).toString("base64url"); }
 
@@ -19,6 +25,6 @@ export async function verifySessionToken(token: string | undefined, secret: stri
   if (!payload || !signed || await signature(payload, secret) !== signed) return false;
   try {
     const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { sub?: unknown; exp?: unknown };
-    return typeof parsed.sub === "string" && parsed.sub === process.env.STUDIO_OWNER_EMAIL && typeof parsed.exp === "number" && parsed.exp > Date.now();
+    return typeof parsed.sub === "string" && configuredAuthSubjects().includes(parsed.sub.toLowerCase()) && typeof parsed.exp === "number" && parsed.exp > Date.now();
   } catch { return false; }
 }

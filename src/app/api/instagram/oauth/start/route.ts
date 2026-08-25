@@ -4,7 +4,7 @@ import { getAppBaseUrl } from "@/services/instagram/config";
 
 export const runtime = "nodejs";
 export async function GET() {
-  try { return NextResponse.redirect(createAuthorizationUrl()); }
+  try { return NextResponse.redirect(await createAuthorizationUrl()); }
   catch (error) {
     const base = getAppBaseUrl();
     if (!base) return NextResponse.json({ error: error instanceof Error ? error.message : "연결을 시작할 수 없습니다." }, { status: 500 });

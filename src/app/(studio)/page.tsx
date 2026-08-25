@@ -7,9 +7,8 @@ import { getDashboardStats, listContents } from "@/lib/db/repository";
 
 export const dynamic = "force-dynamic";
 
-export default function DashboardPage() {
-  const stats = getDashboardStats();
-  const recent = listContents({ limit: 6 });
+export default async function DashboardPage() {
+  const [stats, recent] = await Promise.all([getDashboardStats(), listContents({ limit: 6 })]);
   const statCards = [
     { label: "Source Library", value: stats.total, icon: LibraryBig, note: "등록된 원본 자료" },
     { label: "Ready to publish", value: stats.generated, icon: Sparkles, note: "생성 완료 콘텐츠" },

@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   const contentId = new URL(request.url).searchParams.get("contentId");
   if (!contentId) return NextResponse.json({ error: "contentId가 필요합니다." }, { status: 400 });
   const outputType = new URL(request.url).searchParams.get("outputType") === "INSTAGRAM_EN" ? "INSTAGRAM_EN" : "INSTAGRAM_KR";
-  return NextResponse.json({ job: getLatestPublishJobByContent(contentId, outputType) });
+  return NextResponse.json({ job: await getLatestPublishJobByContent(contentId, outputType) });
 }
 export async function POST(request: Request) {
   try {

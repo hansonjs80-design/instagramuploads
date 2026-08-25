@@ -9,3 +9,10 @@ test("signed owner session rejects tampering", async () => {
   assert.equal(await verifySessionToken(token, secret), true);
   assert.equal(await verifySessionToken(`${token}x`, secret), false);
 });
+
+test("signed admin session accepts configured administrator username", async () => {
+  const secret = "0123456789abcdef0123456789abcdef";
+  process.env.STUDIO_ADMIN_USERNAME = "admin";
+  const token = await createSessionToken("admin", secret);
+  assert.equal(await verifySessionToken(token, secret), true);
+});

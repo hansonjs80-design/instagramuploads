@@ -9,8 +9,8 @@ import { SystemStatus } from "@/components/system-status";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Brand Settings" };
 
-export default function SettingsPage() {
-  const profile = getBrandProfile();
+export default async function SettingsPage() {
+  const profile = await getBrandProfile();
   const apiReady = isOpenAiConfigured();
   return (
     <>

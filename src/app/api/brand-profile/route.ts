@@ -19,7 +19,7 @@ function stringList(value: unknown, maxItems = 12): string[] {
 }
 
 export async function GET() {
-  return NextResponse.json({ profile: getBrandProfile() });
+  return NextResponse.json({ profile: await getBrandProfile() });
 }
 
 export async function PUT(request: Request) {
@@ -37,7 +37,7 @@ export async function PUT(request: Request) {
     const template = templateKeys.includes(body.cardTemplate as TemplateKey)
       ? (body.cardTemplate as TemplateKey)
       : "carousel_story";
-    const profile = saveBrandProfile({
+    const profile = await saveBrandProfile({
       brandName: text(body.brandName, "브랜드 이름", 100),
       tagline: text(body.tagline, "태그라인", 240),
       audience: text(body.audience, "대상 독자"),

@@ -4,15 +4,16 @@ import { INSTAGRAM_AUTHORIZE_URL, INSTAGRAM_TOKEN_URL, getRedirectUri } from "./
 import { InstagramProviderError } from "./errors";
 import { INSTAGRAM_PUBLISH_SCOPES } from "./types";
 
-export function createAuthorizationUrl(): string {
+export async function createAuthorizationUrl(): Promise<string> {
   const appId = process.env.META_APP_ID?.trim();
   if (!appId) throw new InstagramProviderError("CONFIGURATION");
   const redirectUri = getRedirectUri();
   const state = randomBytes(32).toString("base64url");
   const now = new Date();
   const expires = new Date(now.getTime() + 10 * 60_000);
-  getDatabase().prepare("INSERT INTO instagram_oauth_states (state_hash, redirect_uri, created_at, expires_at) VALUES (?, ?, ?, ?)")
-    .run(createHash("sha256").update(state).digest("hex"), redirectUri, now.toISOString(), expires.toISOString());
+  const db = await getDatabase();
+  await db.run("INSERT INTO instagram_oauth_states (state_hash, redirect_uri, created_at, expires_at) VALUES (?, ?, ?, ?)",
+    [createHash("sha256").update(state).digest("hex"), redirectUri, now.toISOString(), expires.toISOString()]);
   const url = new URL(INSTAGRAM_AUTHORIZE_URL);
   url.searchParams.set("enable_fb_login", "0");
   url.searchParams.set("force_authentication", "1");
@@ -26,8 +27,9 @@ export function createAuthorizationUrl(): string {
 
 export async function exchangeAuthorizationCode(code: string, state: string): Promise<{ accessToken: string; userId: string; expiresAt: string | null }> {
   const hash = createHash("sha256").update(state).digest("hex");
-  const row = getDatabase().prepare("SELECT redirect_uri, expires_at FROM instagram_oauth_states WHERE state_hash = ?").get(hash) as { redirect_uri: string; expires_at: string } | undefined;
-  getDatabase().prepare("DELETE FROM instagram_oauth_states WHERE state_hash = ?").run(hash);
+  const db = await getDatabase();
+  const row = await db.get<{ redirect_uri: string; expires_at: string }>("SELECT redirect_uri, expires_at FROM instagram_oauth_states WHERE state_hash = ?", [hash]);
+  await db.run("DELETE FROM instagram_oauth_states WHERE state_hash = ?", [hash]);
   if (!row || new Date(row.expires_at).getTime() < Date.now() || row.redirect_uri !== getRedirectUri()) throw new Error("OAuth state가 만료되었거나 일치하지 않습니다.");
   const appId = process.env.META_APP_ID?.trim();
   const secret = process.env.META_APP_SECRET?.trim();

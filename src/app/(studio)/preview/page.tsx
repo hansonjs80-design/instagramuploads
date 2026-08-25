@@ -8,8 +8,8 @@ import { getBrandProfile } from "@/lib/db/repository";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Live Preview Demo" };
 
-export default function PreviewPage() {
-  const brand = getBrandProfile();
+export default async function PreviewPage() {
+  const brand = await getBrandProfile();
   return (
     <>
       <PageHeader

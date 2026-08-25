@@ -12,7 +12,7 @@ function parseOutputType(value: unknown): "INSTAGRAM_KR" | "INSTAGRAM_EN" {
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const outputType = parseOutputType(new URL(request.url).searchParams.get("outputType"));
-  return getContentById(id) ? NextResponse.json({ versions: listInstagramOutputVersions(id, outputType), outputType }) : NextResponse.json({ error: "콘텐츠를 찾을 수 없습니다." }, { status: 404 });
+  return await getContentById(id) ? NextResponse.json({ versions: await listInstagramOutputVersions(id, outputType), outputType }) : NextResponse.json({ error: "콘텐츠를 찾을 수 없습니다." }, { status: 404 });
 }
 
 function parseCards(value: unknown): InstagramCard[] {
@@ -57,14 +57,14 @@ export async function PUT(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  if (!getContentById(id)) {
+  if (!await getContentById(id)) {
     return NextResponse.json({ error: "콘텐츠를 찾을 수 없습니다." }, { status: 404 });
   }
   try {
     const body = (await request.json()) as { cards?: unknown; engine?: InstagramEnginePlan; createVersion?: boolean; outputType?: unknown };
     const cards = parseCards(body.cards);
     const outputType = parseOutputType(body.outputType);
-    saveInstagramEditor(id, outputType, cards, body.engine, Boolean(body.createVersion));
+    await saveInstagramEditor(id, outputType, cards, body.engine, Boolean(body.createVersion));
     return NextResponse.json({ cards, outputType });
   } catch (error) {
     return NextResponse.json(

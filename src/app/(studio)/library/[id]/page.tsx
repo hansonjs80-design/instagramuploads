@@ -28,9 +28,8 @@ export default async function ContentDetailPage({
 }) {
   const { id } = await params;
   const query = await searchParams;
-  const content = getContentById(id);
+  const [content, brand] = await Promise.all([getContentById(id), getBrandProfile()]);
   if (!content) notFound();
-  const brand = getBrandProfile();
   const hasInstagramKr = Boolean(content.instagram && content.creative && content.instagramEngine);
   const hasInstagramEn = Boolean(content.instagramEn);
   const hasNaver = Boolean(content.blog);

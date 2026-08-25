@@ -13,7 +13,7 @@ export async function generateCardImage(prompt: string): Promise<string> {
   if (!apiKey) throw new AiConfigurationError();
 
   const model = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-2";
-  const brand = getBrandProfile();
+  const brand = await getBrandProfile();
   const response = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
     headers: {

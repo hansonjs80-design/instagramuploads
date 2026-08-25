@@ -4,7 +4,7 @@ import { advancePublishJob, getPublishJob } from "@/services/instagram/publishin
 export const runtime = "nodejs";
 export async function GET(_request: Request, context: { params: Promise<{ jobId: string }> }) {
   const { jobId } = await context.params;
-  const job = getPublishJob(jobId);
+  const job = await getPublishJob(jobId);
   return job ? NextResponse.json({ job }) : NextResponse.json({ error: "게시 작업을 찾을 수 없습니다." }, { status: 404 });
 }
 export async function POST(_request: Request, context: { params: Promise<{ jobId: string }> }) {

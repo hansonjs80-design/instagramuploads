@@ -12,7 +12,7 @@ import { YoutubeAnalyzer } from "@/services/source-analysis/youtube-analyzer";
 export async function analyzeSource(input: AnalyzeSourceInput, providerOverride?: SourceAnalysisProvider): Promise<SourceAnalysis> {
   const detected = detectSource(input.sourceUrl);
   if (!input.force) {
-    const cached = getCachedAnalysis(detected.normalizedUrl, input.mode);
+    const cached = await getCachedAnalysis(detected.normalizedUrl, input.mode);
     if (cached && !input.script?.trim() && !input.caption?.trim() && !input.note?.trim() && !input.mediaFile) return cached;
   }
   const provider = providerOverride ?? (detected.platform === "youtube" ? new YoutubeAnalyzer() : new InstagramAnalyzer());
@@ -55,7 +55,7 @@ export async function analyzeSource(input: AnalyzeSourceInput, providerOverride?
   const classification = classifyContent(availableText, evidence);
   const now = new Date().toISOString();
   const cacheKey = createHash("sha256").update(`${providerResult.normalizedUrl}|${providerResult.sourceRevision}|${input.mode}|${createHash("sha1").update(directText).digest("hex")}`).digest("hex");
-  const previous = input.force ? getCachedAnalysis(providerResult.normalizedUrl, input.mode) : null;
+  const previous = input.force ? await getCachedAnalysis(providerResult.normalizedUrl, input.mode) : null;
   const analysis: SourceAnalysis = {
     id: randomUUID(), contentId: null, sourceUrl: input.sourceUrl, normalizedUrl: providerResult.normalizedUrl,
     platform: providerResult.platform, sourcePlatform: providerResult.sourcePlatform, platformContentId: providerResult.platformContentId,

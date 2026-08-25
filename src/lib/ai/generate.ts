@@ -61,9 +61,9 @@ export async function generateContentBundle(content: ContentItem): Promise<Gener
   if (!apiKey) throw new AiConfigurationError();
 
   const model = getConfiguredModel();
-  const brand = getBrandProfile();
+  const [brand, contents] = await Promise.all([getBrandProfile(), listContents({ limit: 30 })]);
   const template = getContentTemplate(content.templateKey);
-  const relatedLibrary = listContents({ limit: 30 })
+  const relatedLibrary = contents
     .filter((item) => item.id !== content.id)
     .map((item) => ({ title: item.originalTitle, tags: item.tags.map((tag) => tag.name) }));
   const sourceLabel = `${content.expertName} · ${content.platform} · ${content.originalTitle} · ${content.sourceUrl}`;

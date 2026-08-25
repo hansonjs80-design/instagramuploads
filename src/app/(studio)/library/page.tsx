@@ -20,7 +20,7 @@ export default async function LibraryPage({
   const category = (tagCategories.includes(params.category as TagCategory)
     ? params.category
     : "all") as TagCategory | "all";
-  const contents = listContents({ query: params.q, platform, category });
+  const contents = await listContents({ query: params.q, platform, category });
 
   return (
     <>

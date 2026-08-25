@@ -7,8 +7,8 @@ import { listContents } from "@/lib/db/repository";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Blog" };
 
-export default function BlogPage() {
-  const contents = listContents({ generatedOnly: true });
+export default async function BlogPage() {
+  const contents = await listContents({ generatedOnly: true });
   return (
     <>
       <PageHeader eyebrow="Naver Blog" title="블로그 초안" description="원문 번역이 아닌 검색 의도, 원리, 쉬운 설명과 운영자의 해석을 중심으로 구성된 글을 확인합니다." action={<Link href="/blog/keywords" className="btn-secondary"><Search size={15} /> Keyword Planner</Link>} />

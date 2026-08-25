@@ -105,8 +105,8 @@ ${safetyRules}`,
 }
 
 export async function generateNaverKr(content: ContentItem, core: CoreResearchResult["analysis"]): Promise<NaverOutputData> {
-  const brand = getBrandProfile();
-  const relatedLibrary = listContents({ limit: 30 }).filter((item) => item.id !== content.id)
+  const [brand, contents] = await Promise.all([getBrandProfile(), listContents({ limit: 30 })]);
+  const relatedLibrary = contents.filter((item) => item.id !== content.id)
     .map((item) => ({ title: item.originalTitle, tags: item.tags.map((tag) => tag.name) }));
   return structuredRequest<NaverOutputData>(
     "naver_blog_kr",
@@ -130,7 +130,7 @@ export async function generateInstagram(
   core: CoreResearchResult["analysis"],
   locale: "ko" | "en",
 ): Promise<InstagramOutputData> {
-  const brand = getBrandProfile();
+  const brand = await getBrandProfile();
   const isEnglish = locale === "en";
   const languageRules = isEnglish
     ? `Write for a native English-speaking audience. Do not translate or inspect any Korean Instagram output. Build the hook, humor, metaphor, CTA, keywords, hashtags, caption, card rhythm and line lengths independently from the Research Core. Use natural English movement and rehabilitation search terms.`
