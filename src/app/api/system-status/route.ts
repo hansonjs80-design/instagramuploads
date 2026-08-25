@@ -9,6 +9,7 @@ type Status = { name: string; status: "READY" | "WARNING" | "ERROR"; message: st
 export async function GET() {
   const items: Status[] = [];
   items.push({ name: "AI Provider", status: process.env.OPENAI_API_KEY ? "READY" : "WARNING", message: process.env.OPENAI_API_KEY ? "OpenAI server credential configured" : "OPENAI_API_KEY가 필요합니다." });
+  items.push({ name: "Source Analysis", status: process.env.YOUTUBE_API_KEY ? "READY" : "WARNING", message: process.env.YOUTUBE_API_KEY ? "YouTube Data API metadata enabled" : "URL 분석은 동작하지만 YouTube는 oEmbed 최소 정보로 제한됩니다." });
   const database = getDatabaseProviderInfo();
   items.push({ name: "Database", status: database.ready ? "READY" : "ERROR", message: database.message });
   const media = await getMediaStorageProvider(getPublishMode() === "MOCK").healthCheck();

@@ -2,7 +2,7 @@ import "server-only";
 
 import { generationJsonSchema } from "@/lib/ai/schema";
 import { getContentTemplate } from "@/lib/content/templates";
-import type { ContentItem, GeneratedBundle } from "@/lib/content/types";
+import type { ContentItem, ContentLocalization, GeneratedBundle } from "@/lib/content/types";
 import { getBrandProfile, listContents } from "@/lib/db/repository";
 import { instagramEnginePrompt } from "@/lib/instagram/prompt";
 
@@ -67,6 +67,10 @@ export async function generateContentBundle(content: ContentItem): Promise<Gener
     .filter((item) => item.id !== content.id)
     .map((item) => ({ title: item.originalTitle, tags: item.tags.map((tag) => tag.name) }));
   const sourceLabel = `${content.expertName} · ${content.platform} · ${content.originalTitle} · ${content.sourceUrl}`;
+  const sourceAnalysis = content.sourceAnalysis;
+  const evidenceRule = sourceAnalysis
+    ? `자동 출처 분석 근거 수준은 ${sourceAnalysis.evidenceLevel}, 신뢰도는 ${sourceAnalysis.confidence}%입니다. ${sourceAnalysis.evidenceLevel === "A" || sourceAnalysis.evidenceLevel === "B" ? "확인된 스크립트/전사 근거 안에서만 SOURCE CLAIM을 작성하세요." : "전체 영상 내용을 확인한 것처럼 표현하지 말고, 제목·설명 등 공개 정보상 다루는 주제로 보인다는 제한적 표현을 사용하세요. 구체적인 전문가 발언, 영상 장면, 세부 운동 지시는 만들어내지 마세요."}`
+    : "사용자가 제공한 원문 밖의 전문가 발언을 만들어내지 마세요.";
   const instructions = `당신은 물리치료·운동재활 콘텐츠 편집자입니다. 입력 원문은 분석 자료이지 번역 대상이 아닙니다.
 
 반드시 지킬 규칙:
@@ -79,6 +83,7 @@ export async function generateContentBundle(content: ContentItem): Promise<Gener
 - 다른 제작자의 이미지나 카드뉴스 디자인을 복제하도록 지시하지 마세요.
 - 모든 Instagram 카드의 source에는 전문가 이름과 원본 URL을 넣으세요.
 - 블로그의 sourceText와 markdown 마지막 출처에도 제작자, 제목, 플랫폼, URL을 표시하세요.
+- SOURCE CLAIM, INTERPRETATION, APPLICATION을 섞지 마세요. ${evidenceRule}
 
 분석 순서: Original Content → Key Claims → Biomechanics / Rehabilitation Principles → Clinical Interpretation → Easy Explanation → Practical Application → Exercise Ideas → Precautions → Source.
 
@@ -144,7 +149,7 @@ NAVER BLOG MODE 규칙:
       model,
       store: false,
       instructions: `${instructions}\n${naverMode}\n${instagramEnginePrompt(content, brand)}`,
-      input: `출처 정보:\n${sourceLabel}\n\n사용자가 직접 붙여 넣은 원본 스크립트:\n${content.originalScript}`,
+      input: `출처 정보:\n${sourceLabel}\n\n자동 분류:\n${JSON.stringify(sourceAnalysis?.classification ?? {})}\n\n분석 가능한 근거 텍스트:\n${sourceAnalysis?.availableText || content.originalScript}`,
       text: {
         format: {
           type: "json_schema",
@@ -167,5 +172,35 @@ NAVER BLOG MODE 규칙:
 
   const parsed: unknown = JSON.parse(outputText);
   assertBundle(parsed);
-  return parsed;
+  const localizations = await generateEnglishLocalizations(content, parsed, apiKey, model);
+  return { ...parsed, localizations };
+}
+
+async function generateEnglishLocalizations(content: ContentItem, bundle: GeneratedBundle, apiKey: string, model: string): Promise<ContentLocalization[]> {
+  const primaryKeyword = content.sourceAnalysis?.classification.keywords.instagramEn.primary[0]?.value || "movement education";
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, signal: AbortSignal.timeout(90_000),
+    body: JSON.stringify({
+      model, store: false,
+      instructions: "Create native English content from the verified research core. Do not translate the Korean copy. Use natural English search language, a distinct hook and metaphor, cautious medical language, clear source separation, and no long quotation. Return exactly one Instagram object and one Blog object.",
+      input: JSON.stringify({ source: { expert: content.expertName, platform: content.platform, title: content.originalTitle, url: content.sourceUrl, evidenceLevel: content.sourceAnalysis?.evidenceLevel || "unknown" }, researchCore: bundle.analysis, primaryKeyword }),
+      text: { format: { type: "json_schema", name: "english_localizations", strict: true, schema: {
+        type: "object", additionalProperties: false, required: ["instagram", "blog"], properties: {
+          instagram: localizationSchema(), blog: localizationSchema(),
+        },
+      } } },
+    }),
+  });
+  const payload = await response.json() as OpenAIResponse;
+  if (!response.ok) throw new Error(payload.error?.message || `English localization 요청이 실패했습니다 (${response.status}).`);
+  const text = extractOutputText(payload); if (!text) throw new Error("English localization 결과가 비어 있습니다.");
+  const parsed = JSON.parse(text) as { instagram: ContentLocalization["data"]; blog: ContentLocalization["data"] };
+  return [{ locale: "en", platform: "instagram", data: parsed.instagram }, { locale: "en", platform: "blog", data: parsed.blog }];
+}
+
+function localizationSchema() {
+  return { type: "object", additionalProperties: false, required: ["title", "hook", "body", "caption", "keywords", "hashtags", "sourceNotice"], properties: {
+    title: { type: "string" }, hook: { type: "string" }, body: { type: "string" }, caption: { type: "string" },
+    keywords: { type: "array", items: { type: "string" } }, hashtags: { type: "array", items: { type: "string" } }, sourceNotice: { type: "string" },
+  } };
 }

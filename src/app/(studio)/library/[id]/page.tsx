@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ExternalLink, FileText, Images, Lightbulb, Quote, ShieldCheck } from "lucide-react";
+import { ExternalLink, FileText, Images, Languages, Lightbulb, Quote, ShieldCheck } from "lucide-react";
 import { GenerateButton } from "@/components/generate-button";
 import { LivePreviewEditor } from "@/components/live-preview-editor";
 import { PlatformBadge, StatusBadge } from "@/components/status-badge";
+import { SourceAnalysisPanel } from "@/components/source-analysis-panel";
 import { getBrandProfile, getContentById } from "@/lib/db/repository";
 import { formatDate, tagCategoryLabels } from "@/lib/format";
 
@@ -13,6 +14,7 @@ const tabs = [
   { key: "instagram", label: "Live Preview", icon: Images },
   { key: "blog", label: "Blog", icon: FileText },
   { key: "analysis", label: "Analysis", icon: Lightbulb },
+  { key: "english", label: "English", icon: Languages },
   { key: "source", label: "Source", icon: Quote },
 ] as const;
 
@@ -106,7 +108,13 @@ export default async function ContentDetailPage({
         ) : <GenerationPending />
       ) : null}
 
+      {activeTab === "english" ? (
+        content.localizations.length ? <div className="grid gap-5 xl:grid-cols-2">{content.localizations.map((localization) => <article className="panel p-6" key={localization.platform}><span className="eyebrow">English · {localization.platform}</span><h2 className="mb-2 mt-3 text-xl font-extrabold">{localization.data.title}</h2><p className="rounded-xl bg-[#f2f6f4] p-4 text-sm font-bold">{localization.data.hook}</p><p className="whitespace-pre-wrap text-sm leading-7 text-[#52645f]">{localization.data.body}</p>{localization.data.caption ? <div className="mt-4 rounded-xl border border-[#dce6e3] p-4"><strong className="text-xs">Caption</strong><p className="mb-0 mt-2 whitespace-pre-wrap text-xs leading-6">{localization.data.caption}</p></div> : null}<div className="mt-4 flex flex-wrap gap-1.5">{[...localization.data.keywords, ...localization.data.hashtags].map((item) => <span className="tag" key={item}>{item}</span>)}</div><p className="mb-0 mt-4 text-xs text-[#71817e]">{localization.data.sourceNotice}</p></article>)}</div> : <GenerationPending />
+      ) : null}
+
       {activeTab === "source" ? (
+        <div className="space-y-5">
+        {content.sourceAnalysis ? <SourceAnalysisPanel initialAnalysis={content.sourceAnalysis} /> : null}
         <section className="panel p-6 md:p-8">
           <div className="mb-5 flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-[#e4f0ed] text-[#176b63]"><ShieldCheck size={19} /></span><div><h2 className="section-title">Original Content</h2><p className="section-note">출처 추적을 위한 보관 원문</p></div></div>
           <dl className="grid gap-4 text-sm md:grid-cols-2"><div><dt className="field-label">Expert</dt><dd className="m-0 font-bold">{content.expertName}</dd></div><div><dt className="field-label">Platform</dt><dd className="m-0 font-bold capitalize">{content.platform}</dd></div><div><dt className="field-label">Original title</dt><dd className="m-0 font-bold">{content.originalTitle}</dd></div><div><dt className="field-label">Registered</dt><dd className="m-0 font-bold">{formatDate(content.registeredAt)}</dd></div></dl>
@@ -114,6 +122,7 @@ export default async function ContentDetailPage({
           <div className="mt-6 rounded-2xl bg-[#f5f8f7] p-5"><h3 className="m-0 text-sm font-extrabold">원본 스크립트</h3><p className="mb-0 mt-3 whitespace-pre-wrap text-sm leading-7 text-[#51635f]">{content.originalScript}</p></div>
           {content.experienceNote ? <div className="mt-4 rounded-2xl border border-[#d7e4e1] p-5"><h3 className="m-0 text-sm font-extrabold">내 경험 / 관찰</h3><p className="mb-0 mt-3 whitespace-pre-wrap text-sm leading-7 text-[#51635f]">{content.experienceNote}</p></div> : null}
         </section>
+        </div>
       ) : null}
     </>
   );

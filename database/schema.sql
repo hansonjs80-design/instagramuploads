@@ -330,6 +330,127 @@ CREATE TABLE IF NOT EXISTS creative_briefs (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS source_analyses (
+  id TEXT PRIMARY KEY,
+  content_id TEXT UNIQUE REFERENCES content_items(id) ON DELETE CASCADE,
+  source_url TEXT NOT NULL,
+  normalized_url TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  source_platform TEXT NOT NULL,
+  platform_content_id TEXT NOT NULL,
+  source_revision TEXT NOT NULL DEFAULT '',
+  cache_key TEXT NOT NULL UNIQUE,
+  analysis_mode TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  status TEXT NOT NULL,
+  error_code TEXT,
+  user_message TEXT NOT NULL DEFAULT '',
+  metadata_json TEXT NOT NULL,
+  availability_json TEXT NOT NULL,
+  evidence_level TEXT NOT NULL,
+  quality TEXT NOT NULL,
+  confidence INTEGER NOT NULL,
+  source_language TEXT NOT NULL DEFAULT '',
+  available_text TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS source_evidence (
+  id TEXT PRIMARY KEY,
+  analysis_id TEXT NOT NULL REFERENCES source_analyses(id) ON DELETE CASCADE,
+  evidence_type TEXT NOT NULL,
+  locator TEXT NOT NULL,
+  excerpt TEXT NOT NULL,
+  confidence INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS transcript_segments (
+  id TEXT PRIMARY KEY,
+  analysis_id TEXT NOT NULL REFERENCES source_analyses(id) ON DELETE CASCADE,
+  start_seconds REAL NOT NULL,
+  end_seconds REAL NOT NULL,
+  segment_text TEXT NOT NULL,
+  language TEXT NOT NULL,
+  confidence INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS video_frames (
+  id TEXT PRIMARY KEY,
+  analysis_id TEXT NOT NULL REFERENCES source_analyses(id) ON DELETE CASCADE,
+  timestamp_seconds REAL NOT NULL,
+  local_path TEXT NOT NULL DEFAULT '',
+  observation TEXT NOT NULL,
+  confidence INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS content_claims (
+  id TEXT PRIMARY KEY,
+  analysis_id TEXT NOT NULL REFERENCES source_analyses(id) ON DELETE CASCADE,
+  claim_text TEXT NOT NULL,
+  evidence_type TEXT NOT NULL,
+  evidence_ids_json TEXT NOT NULL,
+  timestamp_seconds REAL,
+  frame_id TEXT,
+  confidence INTEGER NOT NULL,
+  source_language TEXT NOT NULL,
+  claim_status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS content_classifications (
+  id TEXT PRIMARY KEY,
+  analysis_id TEXT NOT NULL UNIQUE REFERENCES source_analyses(id) ON DELETE CASCADE,
+  classification_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS classification_overrides (
+  id TEXT PRIMARY KEY,
+  analysis_id TEXT NOT NULL REFERENCES source_analyses(id) ON DELETE CASCADE,
+  field_path TEXT NOT NULL,
+  previous_value_json TEXT NOT NULL,
+  next_value_json TEXT NOT NULL,
+  action TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS source_media_assets (
+  id TEXT PRIMARY KEY,
+  analysis_id TEXT NOT NULL REFERENCES source_analyses(id) ON DELETE CASCADE,
+  media_type TEXT NOT NULL,
+  original_name TEXT NOT NULL,
+  local_path TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS localizations (
+  id TEXT PRIMARY KEY,
+  content_id TEXT NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
+  locale TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  localization_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(content_id, locale, platform)
+);
+
+CREATE TABLE IF NOT EXISTS classification_corrections (
+  id TEXT PRIMARY KEY,
+  analysis_id TEXT NOT NULL REFERENCES source_analyses(id) ON DELETE CASCADE,
+  category TEXT NOT NULL,
+  ai_value TEXT NOT NULL,
+  user_value TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS brand_profiles (
   id TEXT PRIMARY KEY CHECK (id = 'default'),
   brand_name TEXT NOT NULL,
@@ -392,3 +513,7 @@ CREATE INDEX IF NOT EXISTS idx_content_items_platform ON content_items(platform)
 CREATE INDEX IF NOT EXISTS idx_content_items_registered_at ON content_items(registered_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tags_normalized_name ON tags(normalized_name);
 CREATE INDEX IF NOT EXISTS idx_content_tags_content_id ON content_tags(content_id);
+CREATE INDEX IF NOT EXISTS idx_source_analyses_url ON source_analyses(normalized_url, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_source_evidence_analysis ON source_evidence(analysis_id);
+CREATE INDEX IF NOT EXISTS idx_transcript_segments_analysis ON transcript_segments(analysis_id, start_seconds);
+CREATE INDEX IF NOT EXISTS idx_content_claims_analysis ON content_claims(analysis_id);

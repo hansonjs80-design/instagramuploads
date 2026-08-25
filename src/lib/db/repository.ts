@@ -8,6 +8,7 @@ import type {
   BrandProfile,
   ContentAnalysis,
   ContentItem,
+  ContentLocalization,
   ContentStatus,
   ContentSummary,
   ContentTag,
@@ -24,6 +25,7 @@ import type {
   TagCategory,
   TemplateKey,
 } from "@/lib/content/types";
+import { attachAnalysisToContent, getSourceAnalysisForContent } from "@/services/source-analysis/repository";
 
 type ContentRow = {
   id: string;
@@ -140,7 +142,7 @@ function getTags(contentId: string): ContentTag[] {
 
 function mapRow(
   row: ContentRow,
-): Omit<ContentItem, "tags" | "analysis" | "instagram" | "blog" | "creative" | "instagramEngine"> {
+): Omit<ContentItem, "tags" | "analysis" | "instagram" | "blog" | "creative" | "instagramEngine" | "sourceAnalysis" | "localizations"> {
   return {
     id: row.id,
     expertName: row.expert_name,
@@ -188,6 +190,7 @@ export function createContent(input: CreateContentInput): ContentItem {
     );
 
     attachTags(id, input.tags);
+    if (input.sourceAnalysisId) attachAnalysisToContent(input.sourceAnalysisId, id);
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -280,6 +283,7 @@ export function getContentById(id: string): ContentItem | null {
   const instagramEngineRow = db
     .prepare("SELECT engine_json FROM instagram_engine_results WHERE content_id = ?")
     .get(id) as InstagramEngineRow | undefined;
+  const localizationRows = db.prepare("SELECT locale, platform, localization_json FROM localizations WHERE content_id = ? ORDER BY locale, platform").all(id) as Array<{ locale: "en"; platform: "instagram" | "blog"; localization_json: string }>;
 
   const analysis: ContentAnalysis | null = analysisRow
     ? {
@@ -342,6 +346,8 @@ export function getContentById(id: string): ContentItem | null {
     blog,
     creative,
     instagramEngine: instagramEngineRow ? json<InstagramEnginePlan>(instagramEngineRow.engine_json) : null,
+    sourceAnalysis: getSourceAnalysisForContent(id),
+    localizations: localizationRows.map((item) => ({ locale: item.locale, platform: item.platform, data: json<ContentLocalization["data"]>(item.localization_json) })),
   };
 }
 
@@ -487,6 +493,13 @@ export function saveGeneratedBundle(
       now,
       now,
     );
+
+    if (bundle.localizations) {
+      const saveLocalization = db.prepare(`INSERT INTO localizations (id, content_id, locale, platform, localization_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(content_id, locale, platform) DO UPDATE SET localization_json = excluded.localization_json, updated_at = excluded.updated_at`);
+      bundle.localizations.forEach((item) => saveLocalization.run(randomUUID(), contentId, item.locale, item.platform, JSON.stringify(item.data), now, now));
+    }
 
     db.prepare(
       `INSERT INTO creative_briefs (

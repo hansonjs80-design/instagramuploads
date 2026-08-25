@@ -9,7 +9,7 @@ export default function NewContentPage() {
       <PageHeader
         eyebrow="New source"
         title="전문가 콘텐츠 등록"
-        description="출처와 원문을 먼저 기록합니다. 생성물은 원문 복제가 아니라 브랜드 관점의 분석과 새로운 설명으로 구성됩니다."
+        description="링크 하나로 공개 정보를 분석하고 자동 분류합니다. 접근할 수 없는 자막이나 영상 내용은 추측하지 않으며, 필요하면 자료를 추가해 분석을 업그레이드할 수 있습니다."
       />
       <NewContentForm />
     </>

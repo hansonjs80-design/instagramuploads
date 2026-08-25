@@ -4,7 +4,9 @@
 
 ## MVP 기능
 
-- YouTube/Instagram URL, 전문가, 원본 제목, 직접 붙여 넣은 스크립트 등록
+- YouTube/Instagram URL 하나로 플랫폼 감지, 공개 메타데이터 분석, 근거 수준 표시
+- 스크립트·자막·소유 미디어는 선택 입력이며 추가 시 전사 근거로 분석 업그레이드
+- 신체 부위·증상·움직임·생체역학·검색 의도·KR/EN 키워드 자동 분류와 수정/확정/잠금
 - 전문가·플랫폼·URL·등록일·분류 태그·원본 스크립트의 SQLite 보관
 - 핵심 주장부터 임상 해석, 쉬운 설명, 운동 아이디어, 주의사항까지 구조화된 AI 분석
 - 10개 후크 채점, 6개 이상 콘텐츠 각도, 5~9장 Swipe Flow와 Storyboard를 만드는 Instagram Engine
@@ -38,6 +40,8 @@ AI 생성을 사용하려면 `.env.local`에 서버 전용 API 키를 입력합�
 OPENAI_API_KEY=your_api_key_here
 OPENAI_MODEL=gpt-5-mini
 OPENAI_IMAGE_MODEL=gpt-image-2
+OPENAI_TRANSCRIPTION_MODEL=gpt-4o-transcribe
+YOUTUBE_API_KEY=optional_youtube_data_api_key
 ```
 
 키가 없어도 자료 등록, 검색, 출처 관리는 사용할 수 있습니다. AI 생성 요청만 명확한 설정 오류를 반환합니다.
@@ -54,13 +58,24 @@ npm run build
 ## Instagram Workflow
 
 1. Settings → Instagram에서 기본 `MOCK` 계정을 연결하고 연결 상태를 검사합니다.
-2. New Content에서 Source, Script, 필요한 경우 Experience Layer를 입력하고 생성합니다.
+2. New Content에서 링크를 입력하고 `자동 분석`을 누릅니다. Script와 Experience Layer는 선택사항입니다.
 3. Live Preview에서 Hook, 문구, 잠금, 카드 순서, 이미지, Caption과 품질 경고를 확인합니다.
 4. `Instagram에 게시`를 누르면 사전검사를 수행하고 최종 확인 Modal을 표시합니다.
 5. 사용자가 Modal의 두 번째 게시 버튼을 눌러야 Publish Job이 만들어집니다.
 6. LIVE에서는 Meta가 접근할 수 있는 HTTPS 미디어 저장소와 Business/Creator 계정이 필요합니다. 페이지를 열거나 AI 생성만 해서는 절대 게시되지 않습니다.
 
 공식 게시 과정은 child media container → status check → carousel container → status check → `media_publish` 순서입니다. Meta status 확인은 LIVE에서 1분 간격을 사용합니다. 로컬 서버를 종료하면 작업은 멈추며, DB에 저장된 상태는 보존됩니다.
+
+## Automatic Link Analysis Workflow
+
+1. `New Content`에서 YouTube 영상/Shorts 또는 Instagram Post/Reel URL을 붙여 넣습니다.
+2. `FAST`, `STANDARD`, `DEEP` 중 분석 비용·정확도 모드를 고르고 `자동 분석`을 누릅니다.
+3. 앱은 공식 API 또는 공식 공개 메타데이터를 우선 사용합니다. YouTube API 키가 없으면 oEmbed 최소 정보로 낮춰 동작하며, Instagram 본문·미디어에 권한이 없으면 링크 이상의 내용을 추측하지 않습니다.
+4. Source Accuracy에서 Metadata, Transcript, Visual Frames, Evidence Level(A~E), Confidence를 확인합니다.
+5. AI 분류 칩을 확정·추가·삭제·정렬하고 중요한 값은 잠급니다. 재분석해도 잠금 및 사용자 수정값은 보존됩니다.
+6. 생성 시 같은 Research Core를 사용하되 Naver KR, Instagram KR, English 콘텐츠는 각 플랫폼 문맥에 맞춰 별도로 작성됩니다.
+
+업로드한 영상·오디오는 사용자가 소유하거나 분석 권한이 있는 파일만 사용해야 합니다. 현재 서버 전사는 지원하지만 프레임 추출기는 배포 환경의 영상 처리기 연결 전까지 `UNAVAILABLE`로 명확히 표시됩니다. 임의의 제3자 영상 다운로드나 비공식 자막 우회는 사용하지 않습니다.
 
 ## Deployment
 

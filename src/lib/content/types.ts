@@ -168,11 +168,13 @@ export type ContentItem = {
   blog: BlogPost | null;
   creative: CreativeBrief | null;
   instagramEngine: InstagramEnginePlan | null;
+  sourceAnalysis: import("@/services/source-analysis/types").SourceAnalysis | null;
+  localizations: ContentLocalization[];
 };
 
 export type ContentSummary = Omit<
   ContentItem,
-  "originalScript" | "analysis" | "instagram" | "blog" | "creative" | "instagramEngine"
+  "originalScript" | "analysis" | "instagram" | "blog" | "creative" | "instagramEngine" | "sourceAnalysis" | "localizations"
 > & {
   excerpt: string;
 };
@@ -184,6 +186,21 @@ export type GeneratedBundle = {
   suggestedTags: ContentTag[];
   creative: Omit<CreativeBrief, "templateKey">;
   instagramEngine: InstagramEnginePlan;
+  localizations?: ContentLocalization[];
+};
+
+export type ContentLocalization = {
+  locale: "en";
+  platform: "instagram" | "blog";
+  data: {
+    title: string;
+    hook: string;
+    body: string;
+    caption: string;
+    keywords: string[];
+    hashtags: string[];
+    sourceNotice: string;
+  };
 };
 
 export type CreateContentInput = {
@@ -195,6 +212,7 @@ export type CreateContentInput = {
   outputMode: OutputMode;
   experienceNote: string;
   tags: ContentTag[];
+  sourceAnalysisId: string;
 };
 
 export const templateKeys = [

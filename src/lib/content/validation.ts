@@ -56,6 +56,10 @@ function cleanText(value: unknown, label: string, minimum = 1): string {
   return cleaned;
 }
 
+function optionalText(value: unknown, fallback: string, maximum: number): string {
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, maximum) : fallback;
+}
+
 function parseTags(value: unknown): ContentTag[] {
   if (!Array.isArray(value)) return [];
 
@@ -86,10 +90,10 @@ export function parseCreateContentInput(value: unknown): CreateContentInput {
   detectPlatform(sourceUrl);
 
   return {
-    expertName: cleanText(body.expertName, "전문가 이름", 2).slice(0, 100),
+    expertName: optionalText(body.expertName, "확인 필요", 100),
     sourceUrl,
-    originalTitle: cleanText(body.originalTitle, "원본 제목", 2).slice(0, 240),
-    originalScript: cleanText(body.originalScript, "원본 스크립트", 40),
+    originalTitle: optionalText(body.originalTitle, "자동 분석 콘텐츠", 240),
+    originalScript: optionalText(body.originalScript, "원본 스크립트가 제공되지 않았습니다. 공개 메타데이터와 확인된 근거만 사용합니다.", 100_000),
     templateKey: templateKeys.includes(body.templateKey as TemplateKey)
       ? (body.templateKey as TemplateKey)
       : "carousel_story",
@@ -99,5 +103,6 @@ export function parseCreateContentInput(value: unknown): CreateContentInput {
     experienceNote:
       typeof body.experienceNote === "string" ? body.experienceNote.trim().slice(0, 3000) : "",
     tags: parseTags(body.tags),
+    sourceAnalysisId: typeof body.sourceAnalysisId === "string" ? body.sourceAnalysisId.trim() : "",
   };
 }
