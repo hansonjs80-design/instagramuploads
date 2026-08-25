@@ -77,6 +77,8 @@ npm run build
 
 업로드한 영상·오디오는 사용자가 소유하거나 분석 권한이 있는 파일만 사용해야 합니다. 현재 서버 전사는 지원하지만 프레임 추출기는 배포 환경의 영상 처리기 연결 전까지 `UNAVAILABLE`로 명확히 표시됩니다. 임의의 제3자 영상 다운로드나 비공식 자막 우회는 사용하지 않습니다.
 
+Vercel Preview에서는 `VERCEL_URL`을 자동 인식합니다. Preview에서 임시 SQLite를 사용할 경우 `SQLITE_DATABASE_PATH=/tmp/exercise-content-studio.db`로 설정할 수 있지만, 함수 재시작 시 데이터가 초기화될 수 있으므로 화면·워크플로 검증에만 사용합니다.
+
 ## Deployment
 
 1. 프로젝트를 GitHub의 **Private Repository**에 추가합니다. `.env*`, `.data`, `exports`, `public/publish-assets`가 추적되지 않는지 확인합니다.

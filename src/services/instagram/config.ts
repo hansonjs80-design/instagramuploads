@@ -10,10 +10,17 @@ export function getPublishMode(): PublishMode {
   return process.env.INSTAGRAM_PUBLISH_MODE === "LIVE" ? "LIVE" : "MOCK";
 }
 
+export function getAppBaseUrl(): string {
+  const explicit = process.env.APP_BASE_URL?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  const vercelHost = process.env.VERCEL_URL?.trim() || process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  if (vercelHost) return `https://${vercelHost.replace(/^https?:\/\//, "").replace(/\/$/, "")}`;
+  if (process.env.NODE_ENV !== "production") return "http://localhost:3000";
+  throw new Error("APP_BASE_URL 또는 VERCEL_URL을 설정해 주세요.");
+}
+
 export function getRedirectUri(): string {
   const explicit = process.env.INSTAGRAM_REDIRECT_URI?.trim();
   if (explicit) return explicit;
-  const base = process.env.APP_BASE_URL?.trim();
-  if (!base) throw new Error("APP_BASE_URL 또는 INSTAGRAM_REDIRECT_URI를 설정해 주세요.");
-  return `${base.replace(/\/$/, "")}/api/instagram/oauth/callback`;
+  return `${getAppBaseUrl()}/api/instagram/oauth/callback`;
 }
