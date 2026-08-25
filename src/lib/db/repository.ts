@@ -18,10 +18,14 @@ import type {
   GeneratedBundle,
   InstagramCarousel,
   InstagramEnginePlan,
+  InstagramOutputData,
   ImageAsset,
+  NaverOutputData,
   NaverEditorSection,
   Platform,
   OutputMode,
+  OutputDataMap,
+  OutputType,
   TagCategory,
   TemplateKey,
 } from "@/lib/content/types";
@@ -36,6 +40,7 @@ type ContentRow = {
   original_script: string;
   template_key: TemplateKey;
   output_mode: OutputMode;
+  selected_outputs_json: string;
   experience_note: string;
   registered_at: string;
   status: ContentStatus;
@@ -142,7 +147,7 @@ function getTags(contentId: string): ContentTag[] {
 
 function mapRow(
   row: ContentRow,
-): Omit<ContentItem, "tags" | "analysis" | "instagram" | "blog" | "creative" | "instagramEngine" | "sourceAnalysis" | "localizations"> {
+): Omit<ContentItem, "tags" | "analysis" | "instagram" | "blog" | "creative" | "instagramEngine" | "instagramEn" | "generatedOutputTypes" | "sourceAnalysis" | "localizations"> {
   return {
     id: row.id,
     expertName: row.expert_name,
@@ -152,6 +157,7 @@ function mapRow(
     originalScript: row.original_script,
     templateKey: row.template_key,
     outputMode: row.output_mode,
+    selectedOutputTypes: json<OutputType[]>(row.selected_outputs_json),
     experienceNote: row.experience_note,
     registeredAt: row.registered_at,
     status: row.status,
@@ -172,8 +178,8 @@ export function createContent(input: CreateContentInput): ContentItem {
     db.prepare(
       `INSERT INTO content_items
        (id, expert_name, platform, original_title, source_url, original_script,
-        template_key, output_mode, experience_note, registered_at, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
+        template_key, output_mode, selected_outputs_json, experience_note, registered_at, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
     ).run(
       id,
       input.expertName,
@@ -183,6 +189,7 @@ export function createContent(input: CreateContentInput): ContentItem {
       input.originalScript,
       input.templateKey,
       input.outputMode,
+      JSON.stringify(input.selectedOutputTypes),
       input.experienceNote,
       now,
       now,
@@ -284,6 +291,8 @@ export function getContentById(id: string): ContentItem | null {
     .prepare("SELECT engine_json FROM instagram_engine_results WHERE content_id = ?")
     .get(id) as InstagramEngineRow | undefined;
   const localizationRows = db.prepare("SELECT locale, platform, localization_json FROM localizations WHERE content_id = ? ORDER BY locale, platform").all(id) as Array<{ locale: "en"; platform: "instagram" | "blog"; localization_json: string }>;
+  const outputRows = db.prepare("SELECT output_type, output_json FROM content_outputs WHERE content_id = ? ORDER BY output_type").all(id) as Array<{ output_type: OutputType; output_json: string }>;
+  const outputMap = new Map(outputRows.map((item) => [item.output_type, item.output_json]));
 
   const analysis: ContentAnalysis | null = analysisRow
     ? {
@@ -346,6 +355,8 @@ export function getContentById(id: string): ContentItem | null {
     blog,
     creative,
     instagramEngine: instagramEngineRow ? json<InstagramEnginePlan>(instagramEngineRow.engine_json) : null,
+    instagramEn: outputMap.has("INSTAGRAM_EN") ? json<InstagramOutputData>(outputMap.get("INSTAGRAM_EN")!) : null,
+    generatedOutputTypes: outputRows.map((item) => item.output_type),
     sourceAnalysis: getSourceAnalysisForContent(id),
     localizations: localizationRows.map((item) => ({ locale: item.locale, platform: item.platform, data: json<ContentLocalization["data"]>(item.localization_json) })),
   };
@@ -452,6 +463,241 @@ export function getDashboardStats(): {
     youtube: row.youtube ?? 0,
     instagram: row.instagram ?? 0,
   };
+}
+
+function snapshotAndUpsertOutput<T extends OutputType>(
+  contentId: string,
+  outputType: T,
+  output: OutputDataMap[T],
+  model: string,
+  now: string,
+): void {
+  const db = getDatabase();
+  const current = db.prepare("SELECT output_json, model FROM content_outputs WHERE content_id = ? AND output_type = ?")
+    .get(contentId, outputType) as { output_json: string; model: string } | undefined;
+  if (current) {
+    const versionNumber = (db.prepare("SELECT COALESCE(MAX(version_number), 0) + 1 AS number FROM output_versions WHERE content_id = ? AND output_type = ?")
+      .get(contentId, outputType) as { number: number }).number;
+    db.prepare(`INSERT INTO output_versions (id, content_id, output_type, version_number, snapshot_json, model, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .run(randomUUID(), contentId, outputType, versionNumber, current.output_json, current.model, now);
+  }
+  db.prepare(`INSERT INTO content_outputs (id, content_id, output_type, output_json, model, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(content_id, output_type) DO UPDATE SET output_json=excluded.output_json, model=excluded.model, updated_at=excluded.updated_at`)
+    .run(randomUUID(), contentId, outputType, JSON.stringify(output), model, now, now);
+}
+
+export function saveCoreResearch(
+  contentId: string,
+  analysis: Omit<ContentAnalysis, "model">,
+  suggestedTags: ContentTag[],
+  model: string,
+): void {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`INSERT INTO analyses (
+      id, content_id, key_claims_json, biomechanics_principles_json, clinical_interpretation,
+      easy_explanation, practical_application_json, exercise_ideas_json, precautions_json,
+      model, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(content_id) DO UPDATE SET key_claims_json=excluded.key_claims_json,
+      biomechanics_principles_json=excluded.biomechanics_principles_json,
+      clinical_interpretation=excluded.clinical_interpretation,
+      easy_explanation=excluded.easy_explanation,
+      practical_application_json=excluded.practical_application_json,
+      exercise_ideas_json=excluded.exercise_ideas_json,
+      precautions_json=excluded.precautions_json, model=excluded.model, updated_at=excluded.updated_at`)
+      .run(randomUUID(), contentId, JSON.stringify(analysis.keyClaims), JSON.stringify(analysis.biomechanicsPrinciples),
+        analysis.clinicalInterpretation, analysis.easyExplanation, JSON.stringify(analysis.practicalApplication),
+        JSON.stringify(analysis.exerciseIdeas), JSON.stringify(analysis.precautions), model, now, now);
+    attachTags(contentId, suggestedTags);
+    db.prepare("UPDATE content_items SET last_error=NULL, updated_at=? WHERE id=?").run(now, contentId);
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+export function saveInstagramOutput(
+  contentId: string,
+  outputType: "INSTAGRAM_KR" | "INSTAGRAM_EN",
+  output: InstagramOutputData,
+  model: string,
+): void {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    snapshotAndUpsertOutput(contentId, outputType, output, model, now);
+    if (outputType === "INSTAGRAM_KR") {
+      db.prepare(`INSERT INTO creative_briefs (id, content_id, hooks_json, content_angles_json, metaphors_json,
+        empathy_lines_json, humor_lines_json, image_briefs_json, hashtags_json, template_key, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(content_id) DO UPDATE SET hooks_json=excluded.hooks_json, content_angles_json=excluded.content_angles_json,
+        metaphors_json=excluded.metaphors_json, empathy_lines_json=excluded.empathy_lines_json,
+        humor_lines_json=excluded.humor_lines_json, image_briefs_json=excluded.image_briefs_json,
+        hashtags_json=excluded.hashtags_json, template_key=excluded.template_key, updated_at=excluded.updated_at`)
+        .run(randomUUID(), contentId, JSON.stringify(output.creative.hooks), JSON.stringify(output.creative.contentAngles),
+          JSON.stringify(output.creative.metaphors), JSON.stringify(output.creative.empathyLines), JSON.stringify(output.creative.humorLines),
+          JSON.stringify(output.creative.imageBriefs), JSON.stringify(output.creative.hashtags), getContentById(contentId)?.templateKey ?? "carousel_story", now, now);
+      db.prepare(`INSERT INTO instagram_carousels (id, content_id, cards_json, width, height, created_at, updated_at)
+        VALUES (?, ?, ?, 1080, 1350, ?, ?)
+        ON CONFLICT(content_id) DO UPDATE SET cards_json=excluded.cards_json, width=1080, height=1350, updated_at=excluded.updated_at`)
+        .run(randomUUID(), contentId, JSON.stringify(output.instagramCards), now, now);
+      db.prepare(`INSERT INTO instagram_engine_results (id, content_id, engine_json, selected_hook, selected_angle, personality, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(content_id) DO UPDATE SET engine_json=excluded.engine_json, selected_hook=excluded.selected_hook,
+        selected_angle=excluded.selected_angle, personality=excluded.personality, updated_at=excluded.updated_at`)
+        .run(randomUUID(), contentId, JSON.stringify(output.instagramEngine), output.instagramEngine.selectedHookText,
+          output.instagramEngine.selectedAngleType, output.instagramEngine.personality, now, now);
+      db.prepare("DELETE FROM instagram_hooks WHERE content_id=?").run(contentId);
+      const insertHook = db.prepare(`INSERT INTO instagram_hooks
+        (id, content_id, hook_text, hook_type, score, clickbait_risk, score_json, used, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      output.creative.hooks.forEach((hook) => insertHook.run(randomUUID(), contentId, hook.text, hook.type,
+        hook.score, hook.clickbaitRisk, JSON.stringify(hook.scoreBreakdown),
+        hook.text === output.instagramEngine.selectedHookText ? 1 : 0, now));
+      db.prepare("DELETE FROM content_angles WHERE content_id=?").run(contentId);
+      const insertAngle = db.prepare(`INSERT INTO content_angles
+        (id, content_id, angle_type, title, description, is_selected, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+      output.creative.contentAngles.forEach((angle) => insertAngle.run(randomUUID(), contentId, angle.type,
+        angle.title, angle.description, angle.type === output.instagramEngine.selectedAngleType ? 1 : 0, now));
+    }
+    db.prepare("UPDATE content_items SET status='generated', last_error=NULL, updated_at=? WHERE id=?").run(now, contentId);
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+export function saveNaverOutput(contentId: string, output: NaverOutputData, model: string): void {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  const blog = output.blog;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    snapshotAndUpsertOutput(contentId, "NAVER_BLOG_KR", output, model, now);
+    db.prepare(`INSERT INTO blog_posts (id, content_id, title, hook, who_this_is_for, problem_explanation,
+      expert_concept, easy_explanation, clinical_interpretation, applications_json, precautions_json,
+      summary, source_text, related_content_cta, naver_seo_json, markdown, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(content_id) DO UPDATE SET title=excluded.title, hook=excluded.hook,
+      who_this_is_for=excluded.who_this_is_for, problem_explanation=excluded.problem_explanation,
+      expert_concept=excluded.expert_concept, easy_explanation=excluded.easy_explanation,
+      clinical_interpretation=excluded.clinical_interpretation, applications_json=excluded.applications_json,
+      precautions_json=excluded.precautions_json, summary=excluded.summary, source_text=excluded.source_text,
+      related_content_cta=excluded.related_content_cta, naver_seo_json=excluded.naver_seo_json,
+      markdown=excluded.markdown, updated_at=excluded.updated_at`)
+      .run(randomUUID(), contentId, blog.title, blog.hook, JSON.stringify(blog.whoThisIsFor), blog.problemExplanation,
+        blog.expertConcept, blog.easyExplanation, blog.clinicalInterpretation, JSON.stringify(blog.applications),
+        JSON.stringify(blog.precautions), blog.summary, blog.sourceText, blog.relatedContentCta,
+        JSON.stringify(blog.naverSeo), blog.markdown, now, now);
+    const editor = { sections: blogSections(blog), selectedTitle: blog.naverSeo.recommendedTitle || blog.title, selectedHook: blog.hook };
+    db.prepare("UPDATE blog_posts SET editor_json=?, selected_title=?, selected_hook=? WHERE content_id=?")
+      .run(JSON.stringify(editor), editor.selectedTitle, editor.selectedHook, contentId);
+    const seo = blog.naverSeo;
+    db.prepare("DELETE FROM keywords WHERE content_id=?").run(contentId);
+    const insertKeyword = db.prepare(`INSERT INTO keywords
+      (id, content_id, keyword, keyword_type, search_intent_json, is_primary, is_selected, score_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`);
+    [
+      { keyword: seo.primaryKeyword, type: "PRIMARY", primary: 1 },
+      ...seo.secondaryKeywords.map((keyword) => ({ keyword, type: "SECONDARY", primary: 0 })),
+      ...seo.relatedConcepts.map((keyword) => ({ keyword, type: "CONCEPT", primary: 0 })),
+    ].forEach((keyword) => insertKeyword.run(randomUUID(), contentId, keyword.keyword, keyword.type,
+      JSON.stringify(seo.searchIntents), keyword.primary, JSON.stringify({ generated: true }), now));
+    db.prepare("DELETE FROM image_assets WHERE content_id=? AND platform='naver'").run(contentId);
+    const insertImage = db.prepare(`INSERT INTO image_assets
+      (id, content_id, platform, image_type, purpose, position_index, caption, alt_description, image_prompt, brand_style, created_at, updated_at)
+      VALUES (?, ?, 'naver', ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    seo.imagePlan.forEach((image, index) => insertImage.run(randomUUID(), contentId, image.role.toUpperCase(),
+      image.role, index, image.caption, image.caption, image.brief, "움직임노트 Naver Blog", now, now));
+    const clusterName = seo.topicCluster.name.toUpperCase();
+    db.prepare(`INSERT INTO topic_clusters (id, name, description, created_at) VALUES (?, ?, ?, ?)
+      ON CONFLICT(name) DO UPDATE SET description=excluded.description`)
+      .run(randomUUID(), clusterName, seo.topicCluster.relatedTopics.join(", "), now);
+    const cluster = db.prepare("SELECT id FROM topic_clusters WHERE name=?").get(clusterName) as { id: string };
+    db.prepare("INSERT OR IGNORE INTO content_topic_clusters (content_id, cluster_id) VALUES (?, ?)").run(contentId, cluster.id);
+    db.prepare("DELETE FROM quality_reports WHERE content_id=? AND report_type='naver_content_quality'").run(contentId);
+    db.prepare(`INSERT INTO quality_reports (id, content_id, report_type, score, status, checks_json, created_at)
+      VALUES (?, ?, 'naver_content_quality', ?, ?, ?, ?)`)
+      .run(randomUUID(), contentId, seo.seoScore.total, seo.readiness,
+        JSON.stringify({ originality: seo.originalityChecks, brand: seo.brandChecks, keywordWarnings: seo.keywordWarnings }), now);
+    db.prepare("UPDATE content_items SET status='generated', last_error=NULL, updated_at=? WHERE id=?").run(now, contentId);
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+export function listOutputVersions(contentId: string, outputType: OutputType) {
+  return getDatabase().prepare(`SELECT id, version_number versionNumber, snapshot_json snapshotJson,
+    model, created_at createdAt FROM output_versions WHERE content_id=? AND output_type=? ORDER BY version_number DESC`)
+    .all(contentId, outputType) as Array<{ id: string; versionNumber: number; snapshotJson: string; model: string; createdAt: string }>;
+}
+
+export function getInstagramOutput(
+  contentId: string,
+  outputType: "INSTAGRAM_KR" | "INSTAGRAM_EN",
+): InstagramOutputData | null {
+  const row = getDatabase().prepare("SELECT output_json FROM content_outputs WHERE content_id=? AND output_type=?")
+    .get(contentId, outputType) as { output_json: string } | undefined;
+  if (row) return json<InstagramOutputData>(row.output_json);
+  if (outputType === "INSTAGRAM_EN") return null;
+  const content = getContentById(contentId);
+  return content?.instagram && content.creative && content.instagramEngine ? {
+    instagramCards: content.instagram.cards,
+    creative: content.creative,
+    instagramEngine: content.instagramEngine,
+  } : null;
+}
+
+export function saveInstagramEditor(
+  contentId: string,
+  outputType: "INSTAGRAM_KR" | "INSTAGRAM_EN",
+  cards: InstagramCarousel["cards"],
+  engine?: InstagramEnginePlan,
+  createVersion = false,
+): void {
+  const db = getDatabase();
+  const current = getInstagramOutput(contentId, outputType);
+  if (!current) throw new Error("저장된 카드뉴스를 찾을 수 없습니다.");
+  const next: InstagramOutputData = { ...current, instagramCards: cards, instagramEngine: engine ?? current.instagramEngine };
+  const now = new Date().toISOString();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (createVersion) {
+      const number = (db.prepare("SELECT COALESCE(MAX(version_number), 0) + 1 AS number FROM output_versions WHERE content_id=? AND output_type=?")
+        .get(contentId, outputType) as { number: number }).number;
+      db.prepare(`INSERT INTO output_versions (id, content_id, output_type, version_number, snapshot_json, model, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .run(randomUUID(), contentId, outputType, number, JSON.stringify(current), "manual-editor", now);
+    }
+    db.prepare(`INSERT INTO content_outputs (id, content_id, output_type, output_json, model, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'manual-editor', ?, ?)
+      ON CONFLICT(content_id, output_type) DO UPDATE SET output_json=excluded.output_json, updated_at=excluded.updated_at`)
+      .run(randomUUID(), contentId, outputType, JSON.stringify(next), now, now);
+    if (outputType === "INSTAGRAM_KR") {
+      db.prepare("UPDATE instagram_carousels SET cards_json=?, updated_at=? WHERE content_id=?")
+        .run(JSON.stringify(cards), now, contentId);
+      db.prepare(`UPDATE instagram_engine_results SET engine_json=?, selected_hook=?, selected_angle=?, personality=?, updated_at=? WHERE content_id=?`)
+        .run(JSON.stringify(next.instagramEngine), next.instagramEngine.selectedHookText, next.instagramEngine.selectedAngleType, next.instagramEngine.personality, now, contentId);
+    }
+    db.prepare("UPDATE content_items SET updated_at=? WHERE id=?").run(now, contentId);
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+export function listInstagramOutputVersions(contentId: string, outputType: "INSTAGRAM_KR" | "INSTAGRAM_EN") {
+  const rows = listOutputVersions(contentId, outputType);
+  return rows.map((row) => {
+    const snapshot = json<InstagramOutputData>(row.snapshotJson);
+    return {
+      id: row.id, versionNumber: row.versionNumber,
+      snapshot: { cards: snapshot.instagramCards, engine: snapshot.instagramEngine },
+      score: snapshot.instagramEngine.quality.total,
+      hookText: snapshot.instagramEngine.selectedHookText,
+      cardCount: snapshot.instagramCards.length,
+      createdAt: row.createdAt,
+    };
+  });
 }
 
 export function saveGeneratedBundle(

@@ -1,13 +1,15 @@
 import {
   tagCategories,
+  outputTypes,
   templateKeys,
   type ContentTag,
   type CreateContentInput,
   type Platform,
   type OutputMode,
+  type OutputType,
   type TagCategory,
   type TemplateKey,
-} from "@/lib/content/types";
+} from "./types.ts";
 
 const allowedHosts: Record<Platform, string[]> = {
   youtube: ["youtube.com", "www.youtube.com", "youtu.be", "m.youtube.com"],
@@ -80,6 +82,13 @@ function parseTags(value: unknown): ContentTag[] {
   });
 }
 
+export function parseOutputTypes(value: unknown, fallback: OutputType[] = ["NAVER_BLOG_KR", "INSTAGRAM_KR"]): OutputType[] {
+  if (!Array.isArray(value)) return fallback;
+  const selected = outputTypes.filter((type) => value.includes(type));
+  if (!selected.length) throw new InputError("만들 콘텐츠를 하나 이상 선택해 주세요.");
+  return selected;
+}
+
 export function parseCreateContentInput(value: unknown): CreateContentInput {
   if (!value || typeof value !== "object") {
     throw new InputError("등록할 콘텐츠 정보가 필요합니다.");
@@ -88,6 +97,10 @@ export function parseCreateContentInput(value: unknown): CreateContentInput {
   const body = value as Record<string, unknown>;
   const sourceUrl = cleanText(body.sourceUrl, "출처 URL");
   detectPlatform(sourceUrl);
+  const selectedOutputTypes = parseOutputTypes(body.selectedOutputTypes);
+  const outputMode: OutputMode = selectedOutputTypes.includes("NAVER_BLOG_KR")
+    ? selectedOutputTypes.some((type) => type.startsWith("INSTAGRAM_")) ? "both" : "naver_blog"
+    : "instagram";
 
   return {
     expertName: optionalText(body.expertName, "확인 필요", 100),
@@ -97,9 +110,8 @@ export function parseCreateContentInput(value: unknown): CreateContentInput {
     templateKey: templateKeys.includes(body.templateKey as TemplateKey)
       ? (body.templateKey as TemplateKey)
       : "carousel_story",
-    outputMode: (["instagram", "naver_blog", "both"].includes(String(body.outputMode))
-      ? body.outputMode
-      : "both") as OutputMode,
+    outputMode,
+    selectedOutputTypes,
     experienceNote:
       typeof body.experienceNote === "string" ? body.experienceNote.trim().slice(0, 3000) : "",
     tags: parseTags(body.tags),

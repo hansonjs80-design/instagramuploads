@@ -7,14 +7,15 @@ import { PlatformBadge, StatusBadge } from "@/components/status-badge";
 import { SourceAnalysisPanel } from "@/components/source-analysis-panel";
 import { getBrandProfile, getContentById } from "@/lib/db/repository";
 import { formatDate, tagCategoryLabels } from "@/lib/format";
+import { outputTypeLabels } from "@/lib/content/types";
 
 export const dynamic = "force-dynamic";
 
 const tabs = [
-  { key: "instagram", label: "Live Preview", icon: Images },
-  { key: "blog", label: "Blog", icon: FileText },
+  { key: "instagram", label: "Instagram KR", icon: Images },
+  { key: "blog", label: "Naver Blog KR", icon: FileText },
   { key: "analysis", label: "Analysis", icon: Lightbulb },
-  { key: "english", label: "English", icon: Languages },
+  { key: "english", label: "Instagram EN", icon: Languages },
   { key: "source", label: "Source", icon: Quote },
 ] as const;
 
@@ -30,12 +31,16 @@ export default async function ContentDetailPage({
   const content = getContentById(id);
   if (!content) notFound();
   const brand = getBrandProfile();
-  const generated = Boolean(content.analysis && content.instagram && content.blog && content.creative);
+  const hasInstagramKr = Boolean(content.instagram && content.creative && content.instagramEngine);
+  const hasInstagramEn = Boolean(content.instagramEn);
+  const hasNaver = Boolean(content.blog);
+  const generated = hasInstagramKr || hasInstagramEn || hasNaver;
+  const defaultGeneratedTab = hasInstagramKr ? "instagram" : hasNaver ? "blog" : hasInstagramEn ? "english" : "source";
   const allowedTabs = tabs.map((tab) => tab.key);
   const activeTab = allowedTabs.includes(query.tab as (typeof allowedTabs)[number])
     ? query.tab!
     : generated
-      ? "instagram"
+      ? defaultGeneratedTab
       : "source";
 
   return (
@@ -44,14 +49,14 @@ export default async function ContentDetailPage({
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <PlatformBadge platform={content.platform} />
           <StatusBadge status={content.status} />
-          <span className="text-xs font-bold text-[#748381]">{content.expertName} · {formatDate(content.registeredAt)} · {content.outputMode.replace("_", " ")}</span>
+          <span className="text-xs font-bold text-[#748381]">{content.expertName} · {formatDate(content.registeredAt)} · {content.selectedOutputTypes.map((type) => outputTypeLabels[type]).join(" · ")}</span>
         </div>
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
             <h1 className="page-title max-w-4xl">{content.originalTitle}</h1>
             <div className="mt-3 flex flex-wrap gap-1.5">{content.tags.map((tag) => <span className="tag" key={`${tag.category}-${tag.name}`}>{tagCategoryLabels[tag.category]} · {tag.name}</span>)}</div>
           </div>
-          {!generated ? <GenerateButton contentId={content.id} /> : <a className="btn-secondary" href={content.sourceUrl} target="_blank" rel="noreferrer">원본 열기 <ExternalLink size={15} /></a>}
+          {!generated ? <GenerateButton contentId={content.id} initialOutputTypes={content.selectedOutputTypes} /> : <a className="btn-secondary" href={content.sourceUrl} target="_blank" rel="noreferrer">원본 열기 <ExternalLink size={15} /></a>}
         </div>
       </header>
 
@@ -64,11 +69,11 @@ export default async function ContentDetailPage({
       </div>
 
       {activeTab === "instagram" ? (
-        generated ? <LivePreviewEditor contentId={content.id} initialCards={content.instagram!.cards} creative={content.creative!} brand={brand} engine={content.instagramEngine} /> : <GenerationPending />
+        hasInstagramKr ? <LivePreviewEditor contentId={content.id} initialCards={content.instagram!.cards} creative={content.creative!} brand={brand} engine={content.instagramEngine} outputType="INSTAGRAM_KR" /> : <GenerationPending />
       ) : null}
 
       {activeTab === "blog" ? (
-        content.blog && content.creative ? (
+        content.blog ? (
           <div className="space-y-5">
             <NaverSeoSummary seo={content.blog.naverSeo} />
           <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -86,7 +91,7 @@ export default async function ContentDetailPage({
               <div className="my-8 rounded-2xl border-l-4 p-5" style={{ borderColor: brand.accentColor, background: `${brand.accentColor}18` }}><strong>한 줄 정리</strong><p className="!mb-0 !mt-2">{content.blog.summary}</p></div>
               <BlogSection title="출처" text={content.blog.sourceText} />
               <p className="mt-8 border-t border-[#dce6e3] pt-5 font-extrabold" style={{ color: brand.primaryColor }}>{content.blog.relatedContentCta}</p>
-              <div className="mt-5 flex flex-wrap gap-1.5">{Object.values(content.creative.hashtags).flat().map((tag) => <span className="tag" key={tag}>{tag}</span>)}</div>
+              <div className="mt-5 flex flex-wrap gap-1.5">{Object.values(content.blog.naverSeo.tags).flat().map((tag) => <span className="tag" key={tag}>{tag}</span>)}</div>
             </article>
             <aside className="panel sticky top-5 p-5"><h2 className="section-title">Brand check</h2><div className="mt-4 space-y-2 text-xs font-bold text-[#5c6f6b]"><p>✓ {brand.toneOfVoice}</p><p>✓ CTA · {brand.signatureCta}</p><p>✓ 출처 형식 · {brand.sourceCitationStyle}</p><p>✓ 브랜드 해시태그 고정 포함</p></div></aside>
           </div>
@@ -95,7 +100,7 @@ export default async function ContentDetailPage({
       ) : null}
 
       {activeTab === "analysis" ? (
-        content.analysis && content.creative ? (
+        content.analysis ? (
           <div className="space-y-4">
             <AnalysisSection title="Key Claims" items={content.analysis.keyClaims} />
             <AnalysisSection title="Biomechanics / Rehabilitation Principles" items={content.analysis.biomechanicsPrinciples} />
@@ -103,18 +108,18 @@ export default async function ContentDetailPage({
             <TextAnalysis title="Easy Explanation" text={content.analysis.easyExplanation} />
             <AnalysisSection title="Practical Application" items={content.analysis.practicalApplication} />
             <AnalysisSection title="Precautions" items={content.analysis.precautions} />
-            <section className="panel p-6"><h2 className="section-title">Content Angles</h2><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{content.creative.contentAngles.map((angle) => <div className="rounded-xl bg-[#f3f7f5] p-4" key={angle.type}><strong className="text-sm">{angle.title}</strong><p className="mb-0 mt-2 text-xs leading-5 text-[#62736f]">{angle.description}</p></div>)}</div></section>
+            {content.creative ? <section className="panel p-6"><h2 className="section-title">Content Angles</h2><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{content.creative.contentAngles.map((angle) => <div className="rounded-xl bg-[#f3f7f5] p-4" key={angle.type}><strong className="text-sm">{angle.title}</strong><p className="mb-0 mt-2 text-xs leading-5 text-[#62736f]">{angle.description}</p></div>)}</div></section> : null}
           </div>
         ) : <GenerationPending />
       ) : null}
 
       {activeTab === "english" ? (
-        content.localizations.length ? <div className="grid gap-5 xl:grid-cols-2">{content.localizations.map((localization) => <article className="panel p-6" key={localization.platform}><span className="eyebrow">English · {localization.platform}</span><h2 className="mb-2 mt-3 text-xl font-extrabold">{localization.data.title}</h2><p className="rounded-xl bg-[#f2f6f4] p-4 text-sm font-bold">{localization.data.hook}</p><p className="whitespace-pre-wrap text-sm leading-7 text-[#52645f]">{localization.data.body}</p>{localization.data.caption ? <div className="mt-4 rounded-xl border border-[#dce6e3] p-4"><strong className="text-xs">Caption</strong><p className="mb-0 mt-2 whitespace-pre-wrap text-xs leading-6">{localization.data.caption}</p></div> : null}<div className="mt-4 flex flex-wrap gap-1.5">{[...localization.data.keywords, ...localization.data.hashtags].map((item) => <span className="tag" key={item}>{item}</span>)}</div><p className="mb-0 mt-4 text-xs text-[#71817e]">{localization.data.sourceNotice}</p></article>)}</div> : <GenerationPending />
+        hasInstagramEn ? <LivePreviewEditor contentId={content.id} initialCards={content.instagramEn!.instagramCards} creative={{ ...content.instagramEn!.creative, templateKey: content.templateKey }} brand={brand} engine={content.instagramEn!.instagramEngine} outputType="INSTAGRAM_EN" /> : <GenerationPending />
       ) : null}
 
       {activeTab === "source" ? (
         <div className="space-y-5">
-        {content.sourceAnalysis ? <SourceAnalysisPanel initialAnalysis={content.sourceAnalysis} /> : null}
+        {content.sourceAnalysis ? <SourceAnalysisPanel initialAnalysis={content.sourceAnalysis} contentId={content.id} initialOutputTypes={content.generatedOutputTypes.length ? content.generatedOutputTypes : content.selectedOutputTypes} /> : null}
         <section className="panel p-6 md:p-8">
           <div className="mb-5 flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-[#e4f0ed] text-[#176b63]"><ShieldCheck size={19} /></span><div><h2 className="section-title">Original Content</h2><p className="section-note">출처 추적을 위한 보관 원문</p></div></div>
           <dl className="grid gap-4 text-sm md:grid-cols-2"><div><dt className="field-label">Expert</dt><dd className="m-0 font-bold">{content.expertName}</dd></div><div><dt className="field-label">Platform</dt><dd className="m-0 font-bold capitalize">{content.platform}</dd></div><div><dt className="field-label">Original title</dt><dd className="m-0 font-bold">{content.originalTitle}</dd></div><div><dt className="field-label">Registered</dt><dd className="m-0 font-bold">{formatDate(content.registeredAt)}</dd></div></dl>

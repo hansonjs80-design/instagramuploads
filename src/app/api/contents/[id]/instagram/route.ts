@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import { normalizeCards } from "@/lib/content/card-editor";
 import type { InstagramCard, InstagramEnginePlan } from "@/lib/content/types";
-import { getContentById, listInstagramVersions, saveInstagramCards, saveInstagramEngine } from "@/lib/db/repository";
+import { getContentById, listInstagramOutputVersions, saveInstagramEditor } from "@/lib/db/repository";
 
 export const runtime = "nodejs";
 
-export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+function parseOutputType(value: unknown): "INSTAGRAM_KR" | "INSTAGRAM_EN" {
+  return value === "INSTAGRAM_EN" ? "INSTAGRAM_EN" : "INSTAGRAM_KR";
+}
+
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  return getContentById(id) ? NextResponse.json({ versions: listInstagramVersions(id) }) : NextResponse.json({ error: "콘텐츠를 찾을 수 없습니다." }, { status: 404 });
+  const outputType = parseOutputType(new URL(request.url).searchParams.get("outputType"));
+  return getContentById(id) ? NextResponse.json({ versions: listInstagramOutputVersions(id, outputType), outputType }) : NextResponse.json({ error: "콘텐츠를 찾을 수 없습니다." }, { status: 404 });
 }
 
 function parseCards(value: unknown): InstagramCard[] {
@@ -56,11 +61,11 @@ export async function PUT(
     return NextResponse.json({ error: "콘텐츠를 찾을 수 없습니다." }, { status: 404 });
   }
   try {
-    const body = (await request.json()) as { cards?: unknown; engine?: InstagramEnginePlan; createVersion?: boolean };
+    const body = (await request.json()) as { cards?: unknown; engine?: InstagramEnginePlan; createVersion?: boolean; outputType?: unknown };
     const cards = parseCards(body.cards);
-    saveInstagramCards(id, cards);
-    if (body.engine) saveInstagramEngine(id, body.engine, Boolean(body.createVersion));
-    return NextResponse.json({ cards });
+    const outputType = parseOutputType(body.outputType);
+    saveInstagramEditor(id, outputType, cards, body.engine, Boolean(body.createVersion));
+    return NextResponse.json({ cards, outputType });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "카드 저장에 실패했습니다." },

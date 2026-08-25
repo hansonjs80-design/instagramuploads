@@ -19,12 +19,15 @@ function createDatabase(): DatabaseSync {
   const schema = readFileSync(join(process.cwd(), "database", "schema.sql"), "utf8");
   database.exec(schema);
   ensureColumn(database, "content_items", "output_mode", "TEXT NOT NULL DEFAULT 'both'");
+  ensureColumn(database, "content_items", "selected_outputs_json", "TEXT NOT NULL DEFAULT '[\"NAVER_BLOG_KR\",\"INSTAGRAM_KR\"]'");
   ensureColumn(database, "content_items", "experience_note", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(database, "blog_posts", "naver_seo_json", "TEXT NOT NULL DEFAULT '{}'");
   ensureColumn(database, "blog_posts", "editor_json", "TEXT NOT NULL DEFAULT '{}'");
   ensureColumn(database, "blog_posts", "selected_title", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(database, "blog_posts", "selected_hook", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(database, "brand_profiles", "instagram_settings_json", "TEXT NOT NULL DEFAULT '{}'");
+  ensureColumn(database, "instagram_publish_jobs", "output_type", "TEXT NOT NULL DEFAULT 'INSTAGRAM_KR'");
+  ensureColumn(database, "instagram_published_posts", "output_type", "TEXT NOT NULL DEFAULT 'INSTAGRAM_KR'");
   return database;
 }
 

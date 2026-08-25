@@ -222,6 +222,7 @@ export function LivePreviewEditor({
   creative,
   brand,
   engine,
+  outputType = "INSTAGRAM_KR",
   demoMode = false,
 }: {
   contentId: string;
@@ -229,6 +230,7 @@ export function LivePreviewEditor({
   creative: CreativeBrief;
   brand: BrandProfile;
   engine?: InstagramEnginePlan | null;
+  outputType?: "INSTAGRAM_KR" | "INSTAGRAM_EN";
   demoMode?: boolean;
 }) {
   const [cards, setCards] = useState(() =>
@@ -274,11 +276,11 @@ export function LivePreviewEditor({
   useEffect(() => {
     if (demoMode) return;
     let active = true;
-    fetch(`/api/instagram/publish?contentId=${encodeURIComponent(contentId)}`, { cache: "no-store" })
+    fetch(`/api/instagram/publish?contentId=${encodeURIComponent(contentId)}&outputType=${outputType}`, { cache: "no-store" })
       .then((response) => response.json())
       .then((payload: { job?: typeof publishJob }) => { if (active && payload.job) setPublishJob(payload.job); });
     return () => { active = false; };
-  }, [contentId, demoMode]);
+  }, [contentId, demoMode, outputType]);
 
   useEffect(() => {
     if (demoMode) return;
@@ -292,7 +294,7 @@ export function LivePreviewEditor({
         const response = await fetch(`/api/contents/${contentId}/instagram`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cards, engine: engineDraft ? { ...engineDraft, cardCount: cards.length, caption: { ...engineDraft.caption, fullText: caption }, quality } : undefined }),
+          body: JSON.stringify({ outputType, cards, engine: engineDraft ? { ...engineDraft, cardCount: cards.length, caption: { ...engineDraft.caption, fullText: caption }, quality } : undefined }),
         });
         if (!response.ok) throw new Error("카드 저장에 실패했습니다.");
         setSaveState("saved");
@@ -301,7 +303,7 @@ export function LivePreviewEditor({
       }
     }, 700);
     return () => window.clearTimeout(timer);
-  }, [cards, contentId, demoMode, engineDraft, caption, quality]);
+  }, [cards, contentId, demoMode, engineDraft, caption, quality, outputType]);
 
   function updateCard(patch: Partial<InstagramCard>) {
     setCards((current) => current.map((item, index) => index === activeIndex ? { ...item, ...patch } : item));
@@ -425,14 +427,14 @@ export function LivePreviewEditor({
 
   async function improveInstagram() {
     if (!demoMode && engineDraft) {
-      await fetch(`/api/contents/${contentId}/instagram`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cards, engine: { ...engineDraft, quality }, createVersion: true }) });
+      await fetch(`/api/contents/${contentId}/instagram`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ outputType, cards, engine: { ...engineDraft, quality }, createVersion: true }) });
     }
     setCards((current) => improveUnlockedCards(current));
   }
 
   async function openVersions() {
     if (demoMode) return;
-    const response = await fetch(`/api/contents/${contentId}/instagram`);
+    const response = await fetch(`/api/contents/${contentId}/instagram?outputType=${outputType}`);
     const payload = await response.json() as { versions?: NonNullable<typeof versions>; error?: string };
     if (!response.ok) { setEditorError(payload.error || "버전 기록을 불러오지 못했습니다."); return; }
     setVersions(payload.versions ?? []);
@@ -454,7 +456,7 @@ export function LivePreviewEditor({
         if (!node) throw new Error("카드 렌더링을 찾을 수 없습니다.");
         images.push(await toJpeg(node, { width: 1080, height: 1350, canvasWidth: 1080, canvasHeight: 1350, pixelRatio: 1, quality: .94, cacheBust: true }));
       }
-      const response = await fetch("/api/instagram/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contentId, caption, images, confirmed: true }) });
+      const response = await fetch("/api/instagram/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contentId, outputType, caption, images, confirmed: true }) });
       const payload = await response.json() as { job?: { id: string; status: string }; error?: string };
       if (!response.ok || !payload.job) throw new Error(payload.error || "게시 작업을 만들지 못했습니다.");
       setPublishJob(payload.job); setPublishModal(false);
@@ -582,7 +584,7 @@ export function LivePreviewEditor({
 
       {publishJob ? <section className={`panel mt-5 p-5 ${publishJob.status === "FAILED" ? "border-[#e7bcb5]" : "border-[#b8d9d1]"}`}><h2 className="section-title">{publishJob.status === "PUBLISHED" ? "✅ Instagram 게시 완료" : publishJob.status === "FAILED" ? "게시 실패" : "Instagram에 게시 중"}</h2><p className="text-sm font-bold">현재 단계 · {publishJob.status}</p><p className="text-xs text-[#6b7b78]">로컬 서버를 끄면 작업이 멈춥니다. 다시 실행하면 저장된 Job 상태를 조회할 수 있습니다.</p>{publishJob.errorMessage ? <p className="text-sm text-[#a2473f]">{publishJob.errorMessage}</p> : null}{publishJob.permalink ? <a className="btn-primary" href={publishJob.permalink} target="_blank" rel="noreferrer">Instagram에서 보기</a> : null}</section> : null}
 
-      {publishModal && publishInfo ? <div className="fixed inset-0 z-50 grid place-items-center bg-[#10211f]/70 p-4"><div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl"><span className="eyebrow">Final confirmation</span><h2 className="mt-2 text-2xl font-black">Instagram 게시 확인</h2><div className="mt-5 grid grid-cols-2 gap-3 text-sm"><InfoRow label="ACCOUNT" value={`@${publishInfo.account.username}`} /><InfoRow label="CAROUSEL" value={`${cards.length} cards`} /><InfoRow label="IMAGE" value="1080 × 1350 JPEG" /><InfoRow label="CAPTION" value="Ready" /><InfoRow label="SOURCE" value="Included" /><InfoRow label="QUALITY" value={`${quality.total} / 100`} /><InfoRow label="BRAND" value={`${quality.scores.brand} / 100`} /><InfoRow label="LIMIT" value={`${publishInfo.limit?.usage ?? "-"} / ${publishInfo.limit?.total ?? "API limit"}`} /></div><p className="mt-5 rounded-xl bg-[#fff4f2] p-4 text-sm font-extrabold text-[#8f4139]">게시를 누르면 실제 Instagram 계정에 공개됩니다. LIVE 모드에서는 되돌릴 수 없습니다.</p><div className="mt-5 flex justify-end gap-2"><button className="btn-secondary" type="button" onClick={() => setPublishModal(false)}>취소</button><button className="btn-primary" type="button" onClick={() => void confirmPublish()} disabled={publishBusy}><Send size={15} /> Instagram에 게시</button></div></div></div> : null}
+      {publishModal && publishInfo ? <div className="fixed inset-0 z-50 grid place-items-center bg-[#10211f]/70 p-4"><div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl"><span className="eyebrow">Final confirmation</span><h2 className="mt-2 text-2xl font-black">Instagram 게시 확인</h2><div className="mt-5 grid grid-cols-2 gap-3 text-sm"><InfoRow label="OUTPUT" value={outputType === "INSTAGRAM_EN" ? "English Instagram" : "한국어 Instagram"} /><InfoRow label="ACCOUNT" value={`@${publishInfo.account.username}`} /><InfoRow label="CAROUSEL" value={`${cards.length} cards`} /><InfoRow label="IMAGE" value="1080 × 1350 JPEG" /><InfoRow label="CAPTION" value="Ready" /><InfoRow label="SOURCE" value="Included" /><InfoRow label="QUALITY" value={`${quality.total} / 100`} /><InfoRow label="BRAND" value={`${quality.scores.brand} / 100`} /><InfoRow label="LIMIT" value={`${publishInfo.limit?.usage ?? "-"} / ${publishInfo.limit?.total ?? "API limit"}`} /></div><p className="mt-5 rounded-xl bg-[#fff4f2] p-4 text-sm font-extrabold text-[#8f4139]">게시를 누르면 실제 Instagram 계정에 공개됩니다. LIVE 모드에서는 되돌릴 수 없습니다.</p><div className="mt-5 flex justify-end gap-2"><button className="btn-secondary" type="button" onClick={() => setPublishModal(false)}>취소</button><button className="btn-primary" type="button" onClick={() => void confirmPublish()} disabled={publishBusy}><Send size={15} /> Instagram에 게시</button></div></div></div> : null}
       {versions ? <div className="fixed inset-0 z-50 grid place-items-center bg-[#10211f]/70 p-4"><div className="max-h-[80vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6"><div className="flex items-center justify-between"><h2 className="text-xl font-black">Version History</h2><button className="btn-secondary" type="button" onClick={() => setVersions(null)}>닫기</button></div><div className="mt-4 space-y-2">{versions.length ? versions.map((version) => <button type="button" className="w-full rounded-xl border border-[#dce6e3] p-4 text-left hover:bg-[#f4f8f6]" key={version.id} onClick={() => restoreVersion(version)}><span className="flex justify-between text-sm font-extrabold"><span>Version {version.versionNumber} · {version.cardCount} cards</span><span>{version.score}/100</span></span><span className="mt-1 block truncate text-xs text-[#657572]">{version.hookText || "Hook snapshot"} · {new Date(version.createdAt).toLocaleString("ko-KR")}</span></button>) : <p className="text-sm text-[#6b7b78]">아직 저장된 이전 버전이 없습니다.</p>}</div></div></div> : null}
 
       <div aria-hidden="true" className="fixed left-[-20000px] top-0">

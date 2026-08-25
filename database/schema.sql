@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS content_items (
   original_script TEXT NOT NULL,
   template_key TEXT NOT NULL DEFAULT 'carousel_story',
   output_mode TEXT NOT NULL DEFAULT 'both' CHECK (output_mode IN ('instagram', 'naver_blog', 'both')),
+  selected_outputs_json TEXT NOT NULL DEFAULT '["NAVER_BLOG_KR","INSTAGRAM_KR"]',
   experience_note TEXT NOT NULL DEFAULT '',
   registered_at TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'generated', 'error')),
@@ -45,6 +46,34 @@ CREATE TABLE IF NOT EXISTS analyses (
   precautions_json TEXT NOT NULL,
   model TEXT NOT NULL,
   created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS content_outputs (
+  id TEXT PRIMARY KEY,
+  content_id TEXT NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
+  output_type TEXT NOT NULL CHECK (output_type IN ('NAVER_BLOG_KR', 'INSTAGRAM_KR', 'INSTAGRAM_EN')),
+  output_json TEXT NOT NULL,
+  model TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(content_id, output_type)
+);
+
+CREATE TABLE IF NOT EXISTS output_versions (
+  id TEXT PRIMARY KEY,
+  content_id TEXT NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
+  output_type TEXT NOT NULL CHECK (output_type IN ('NAVER_BLOG_KR', 'INSTAGRAM_KR', 'INSTAGRAM_EN')),
+  version_number INTEGER NOT NULL,
+  snapshot_json TEXT NOT NULL,
+  model TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(content_id, output_type, version_number)
+);
+
+CREATE TABLE IF NOT EXISTS instagram_output_account_defaults (
+  output_type TEXT PRIMARY KEY CHECK (output_type IN ('INSTAGRAM_KR', 'INSTAGRAM_EN')),
+  account_id TEXT REFERENCES instagram_accounts(id) ON DELETE SET NULL,
   updated_at TEXT NOT NULL
 );
 
@@ -133,6 +162,7 @@ CREATE TABLE IF NOT EXISTS instagram_publish_jobs (
   account_id TEXT NOT NULL REFERENCES instagram_accounts(id) ON DELETE RESTRICT,
   content_id TEXT NOT NULL REFERENCES content_items(id) ON DELETE RESTRICT,
   content_version_id TEXT NOT NULL,
+  output_type TEXT NOT NULL DEFAULT 'INSTAGRAM_KR',
   idempotency_key TEXT NOT NULL UNIQUE,
   status TEXT NOT NULL,
   caption TEXT NOT NULL,
@@ -172,6 +202,7 @@ CREATE TABLE IF NOT EXISTS instagram_published_posts (
   instagram_account_id TEXT NOT NULL REFERENCES instagram_accounts(id) ON DELETE RESTRICT,
   content_id TEXT NOT NULL REFERENCES content_items(id) ON DELETE RESTRICT,
   content_version_id TEXT NOT NULL,
+  output_type TEXT NOT NULL DEFAULT 'INSTAGRAM_KR',
   publish_job_id TEXT NOT NULL UNIQUE REFERENCES instagram_publish_jobs(id) ON DELETE RESTRICT,
   instagram_media_id TEXT NOT NULL,
   permalink TEXT NOT NULL DEFAULT '',
@@ -186,6 +217,7 @@ CREATE TABLE IF NOT EXISTS instagram_published_posts (
 
 CREATE INDEX IF NOT EXISTS idx_instagram_publish_jobs_content ON instagram_publish_jobs(content_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_instagram_published_posts_date ON instagram_published_posts(published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_content_outputs_content ON content_outputs(content_id, output_type);
 
 CREATE TABLE IF NOT EXISTS blog_posts (
   id TEXT PRIMARY KEY,

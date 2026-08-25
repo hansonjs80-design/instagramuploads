@@ -11,6 +11,20 @@ export type Platform = "youtube" | "instagram";
 export type ContentStatus = "draft" | "generated" | "error";
 export type OutputMode = "instagram" | "naver_blog" | "both";
 
+export const outputTypes = [
+  "NAVER_BLOG_KR",
+  "INSTAGRAM_KR",
+  "INSTAGRAM_EN",
+] as const;
+
+export type OutputType = (typeof outputTypes)[number];
+
+export const outputTypeLabels: Record<OutputType, string> = {
+  NAVER_BLOG_KR: "🇰🇷 네이버 블로그",
+  INSTAGRAM_KR: "🇰🇷 인스타그램 카드뉴스",
+  INSTAGRAM_EN: "🇺🇸 English Instagram Carousel",
+};
+
 export type ContentTag = {
   id?: number;
   name: string;
@@ -156,6 +170,7 @@ export type ContentItem = {
   originalScript: string;
   templateKey: TemplateKey;
   outputMode: OutputMode;
+  selectedOutputTypes: OutputType[];
   experienceNote: string;
   registeredAt: string;
   status: ContentStatus;
@@ -168,13 +183,15 @@ export type ContentItem = {
   blog: BlogPost | null;
   creative: CreativeBrief | null;
   instagramEngine: InstagramEnginePlan | null;
+  instagramEn: InstagramOutputData | null;
+  generatedOutputTypes: OutputType[];
   sourceAnalysis: import("@/services/source-analysis/types").SourceAnalysis | null;
   localizations: ContentLocalization[];
 };
 
 export type ContentSummary = Omit<
   ContentItem,
-  "originalScript" | "analysis" | "instagram" | "blog" | "creative" | "instagramEngine" | "sourceAnalysis" | "localizations"
+  "originalScript" | "analysis" | "instagram" | "blog" | "creative" | "instagramEngine" | "instagramEn" | "generatedOutputTypes" | "sourceAnalysis" | "localizations"
 > & {
   excerpt: string;
 };
@@ -187,6 +204,25 @@ export type GeneratedBundle = {
   creative: Omit<CreativeBrief, "templateKey">;
   instagramEngine: InstagramEnginePlan;
   localizations?: ContentLocalization[];
+};
+
+export type CoreResearchResult = {
+  analysis: Omit<ContentAnalysis, "model">;
+  suggestedTags: ContentTag[];
+};
+
+export type InstagramOutputData = {
+  instagramCards: InstagramCard[];
+  creative: Omit<CreativeBrief, "templateKey">;
+  instagramEngine: InstagramEnginePlan;
+};
+
+export type NaverOutputData = { blog: BlogPost };
+
+export type OutputDataMap = {
+  NAVER_BLOG_KR: NaverOutputData;
+  INSTAGRAM_KR: InstagramOutputData;
+  INSTAGRAM_EN: InstagramOutputData;
 };
 
 export type ContentLocalization = {
@@ -210,6 +246,7 @@ export type CreateContentInput = {
   originalScript: string;
   templateKey: TemplateKey;
   outputMode: OutputMode;
+  selectedOutputTypes: OutputType[];
   experienceNote: string;
   tags: ContentTag[];
   sourceAnalysisId: string;

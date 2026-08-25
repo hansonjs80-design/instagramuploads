@@ -2,25 +2,25 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getDatabase } from "@/lib/db/client";
-import { getContentById } from "@/lib/db/repository";
+import { getContentById, getInstagramOutput } from "@/lib/db/repository";
 import { getInstagramAccount, getAccountToken } from "./account-repository";
 import { InstagramProviderError } from "./errors";
 import { getMediaStorageProvider } from "./media-storage";
 import { getInstagramProvider } from "./provider";
 import { INSTAGRAM_CAROUSEL_MAX_ITEMS, type PublishJobStatus } from "./types";
 
-export type PublishJob = { id: string; contentId: string; status: PublishJobStatus; caption: string; qualityScore: number; brandScore: number; createdAt: string; completedAt: string | null; errorCode: string | null; errorMessage: string | null; carouselContainerId: string | null; instagramMediaId: string | null; nextPollAt: string | null; accountUsername: string; cardCount: number; permalink: string };
-type JobRow = { id: string; content_id: string; status: PublishJobStatus; caption: string; quality_score: number; brand_score: number; created_at: string; completed_at: string | null; error_code: string | null; error_message: string | null; carousel_container_id: string | null; instagram_media_id: string | null; next_poll_at: string | null; username: string; card_count: number; permalink: string | null };
+export type PublishJob = { id: string; contentId: string; outputType: "INSTAGRAM_KR" | "INSTAGRAM_EN"; status: PublishJobStatus; caption: string; qualityScore: number; brandScore: number; createdAt: string; completedAt: string | null; errorCode: string | null; errorMessage: string | null; carouselContainerId: string | null; instagramMediaId: string | null; nextPollAt: string | null; accountUsername: string; cardCount: number; permalink: string };
+type JobRow = { id: string; content_id: string; output_type: "INSTAGRAM_KR" | "INSTAGRAM_EN"; status: PublishJobStatus; caption: string; quality_score: number; brand_score: number; created_at: string; completed_at: string | null; error_code: string | null; error_message: string | null; carousel_container_id: string | null; instagram_media_id: string | null; next_poll_at: string | null; username: string; card_count: number; permalink: string | null };
 
-function mapJob(row: JobRow): PublishJob { return { id: row.id, contentId: row.content_id, status: row.status, caption: row.caption, qualityScore: row.quality_score, brandScore: row.brand_score, createdAt: row.created_at, completedAt: row.completed_at, errorCode: row.error_code, errorMessage: row.error_message, carouselContainerId: row.carousel_container_id, instagramMediaId: row.instagram_media_id, nextPollAt: row.next_poll_at, accountUsername: row.username, cardCount: row.card_count, permalink: row.permalink || "" }; }
+function mapJob(row: JobRow): PublishJob { return { id: row.id, contentId: row.content_id, outputType: row.output_type, status: row.status, caption: row.caption, qualityScore: row.quality_score, brandScore: row.brand_score, createdAt: row.created_at, completedAt: row.completed_at, errorCode: row.error_code, errorMessage: row.error_message, carouselContainerId: row.carousel_container_id, instagramMediaId: row.instagram_media_id, nextPollAt: row.next_poll_at, accountUsername: row.username, cardCount: row.card_count, permalink: row.permalink || "" }; }
 
 export function getPublishJob(id: string): PublishJob | null {
   const row = getDatabase().prepare(`SELECT j.*, a.username, (SELECT COUNT(*) FROM instagram_publish_assets x WHERE x.publish_job_id=j.id) card_count, p.permalink FROM instagram_publish_jobs j JOIN instagram_accounts a ON a.id=j.account_id LEFT JOIN instagram_published_posts p ON p.publish_job_id=j.id WHERE j.id=?`).get(id) as JobRow | undefined;
   return row ? mapJob(row) : null;
 }
 
-export function getLatestPublishJobByContent(contentId: string): PublishJob | null {
-  const row = getDatabase().prepare(`SELECT j.*, a.username, (SELECT COUNT(*) FROM instagram_publish_assets x WHERE x.publish_job_id=j.id) card_count, p.permalink FROM instagram_publish_jobs j JOIN instagram_accounts a ON a.id=j.account_id LEFT JOIN instagram_published_posts p ON p.publish_job_id=j.id WHERE j.content_id=? ORDER BY j.created_at DESC LIMIT 1`).get(contentId) as JobRow | undefined;
+export function getLatestPublishJobByContent(contentId: string, outputType: "INSTAGRAM_KR" | "INSTAGRAM_EN" = "INSTAGRAM_KR"): PublishJob | null {
+  const row = getDatabase().prepare(`SELECT j.*, a.username, (SELECT COUNT(*) FROM instagram_publish_assets x WHERE x.publish_job_id=j.id) card_count, p.permalink FROM instagram_publish_jobs j JOIN instagram_accounts a ON a.id=j.account_id LEFT JOIN instagram_published_posts p ON p.publish_job_id=j.id WHERE j.content_id=? AND j.output_type=? ORDER BY j.created_at DESC LIMIT 1`).get(contentId, outputType) as JobRow | undefined;
   return row ? mapJob(row) : null;
 }
 
@@ -38,14 +38,15 @@ function jpegDimensions(bytes: Buffer): { width: number; height: number } | null
   return null;
 }
 
-export async function createPublishJob(input: { contentId: string; caption: string; images: string[]; confirmed: boolean; republish?: boolean }): Promise<PublishJob> {
+export async function createPublishJob(input: { contentId: string; outputType: "INSTAGRAM_KR" | "INSTAGRAM_EN"; caption: string; images: string[]; confirmed: boolean; republish?: boolean }): Promise<PublishJob> {
   if (!input.confirmed) throw new Error("최종 게시 확인이 필요합니다.");
   const account = getInstagramAccount();
   const content = getContentById(input.contentId);
-  if (!account || !content?.instagram || !content.instagramEngine) throw new Error("게시할 계정 또는 콘텐츠가 준비되지 않았습니다.");
-  if (input.images.length < 2 || input.images.length > INSTAGRAM_CAROUSEL_MAX_ITEMS || input.images.length !== content.instagram.cards.length) throw new Error("Carousel 이미지 수와 카드 순서가 일치하지 않습니다.");
-  if (content.instagramEngine.quality.warnings.some((warning) => warning.severity === "error")) throw new Error("치명적인 Instagram 품질 오류를 먼저 해결해 주세요.");
-  if (!content.instagram.cards.at(-1)?.source && !input.caption.includes("Source")) throw new Error("출처 정보가 누락되었습니다.");
+  const instagramOutput = content ? getInstagramOutput(input.contentId, input.outputType) : null;
+  if (!account || !content || !instagramOutput) throw new Error("게시할 계정 또는 콘텐츠가 준비되지 않았습니다.");
+  if (input.images.length < 2 || input.images.length > INSTAGRAM_CAROUSEL_MAX_ITEMS || input.images.length !== instagramOutput.instagramCards.length) throw new Error("Carousel 이미지 수와 카드 순서가 일치하지 않습니다.");
+  if (instagramOutput.instagramEngine.quality.warnings.some((warning) => warning.severity === "error")) throw new Error("치명적인 Instagram 품질 오류를 먼저 해결해 주세요.");
+  if (!instagramOutput.instagramCards.at(-1)?.source && !input.caption.includes("Source")) throw new Error("출처 정보가 누락되었습니다.");
   const decoded = input.images.map((data, index) => {
     const match = data.match(/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/);
     if (!match) throw new Error(`${index + 1}번 이미지는 JPEG 형식이 아닙니다.`);
@@ -56,7 +57,7 @@ export async function createPublishJob(input: { contentId: string; caption: stri
   });
   if (new Set(decoded.map((item) => item.hash)).size !== decoded.length) throw new Error("중복 이미지가 포함되어 있습니다.");
   const version = content.updatedAt;
-  const idempotencyKey = createHash("sha256").update([input.contentId, version, account.id, ...decoded.map((item) => item.hash)].join("|")).digest("hex");
+  const idempotencyKey = createHash("sha256").update([input.contentId, input.outputType, version, account.id, ...decoded.map((item) => item.hash)].join("|")).digest("hex");
   const existing = getDatabase().prepare("SELECT id, status FROM instagram_publish_jobs WHERE idempotency_key = ?").get(idempotencyKey) as { id: string; status: PublishJobStatus } | undefined;
   if (existing && (!input.republish || existing.status !== "PUBLISHED")) throw new InstagramProviderError("DUPLICATE_PUBLISH");
   const jobId = randomUUID();
@@ -66,8 +67,8 @@ export async function createPublishJob(input: { contentId: string; caption: stri
   const db = getDatabase();
   db.exec("BEGIN IMMEDIATE");
   try {
-    db.prepare(`INSERT INTO instagram_publish_jobs (id, account_id, content_id, content_version_id, idempotency_key, status, caption, quality_score, brand_score, created_at, confirmed_at) VALUES (?, ?, ?, ?, ?, 'PREPARING', ?, ?, ?, ?, ?)`)
-      .run(jobId, account.id, input.contentId, version, input.republish ? `${idempotencyKey}-${randomUUID()}` : idempotencyKey, input.caption, content.instagramEngine.quality.total, content.instagramEngine.quality.scores.brand, now, now);
+    db.prepare(`INSERT INTO instagram_publish_jobs (id, account_id, content_id, content_version_id, output_type, idempotency_key, status, caption, quality_score, brand_score, created_at, confirmed_at) VALUES (?, ?, ?, ?, ?, ?, 'PREPARING', ?, ?, ?, ?, ?)`)
+      .run(jobId, account.id, input.contentId, version, input.outputType, input.republish ? `${idempotencyKey}-${randomUUID()}` : idempotencyKey, input.caption, instagramOutput.instagramEngine.quality.total, instagramOutput.instagramEngine.quality.scores.brand, now, now);
     for (let index = 0; index < decoded.length; index++) {
       const path = join(directory, `${String(index + 1).padStart(2, "0")}.jpg`);
       await writeFile(path, decoded[index].bytes);
@@ -86,7 +87,7 @@ function setStatus(id: string, status: PublishJobStatus, extras: { carousel?: st
 
 export async function advancePublishJob(id: string): Promise<PublishJob> {
   const db = getDatabase();
-  const raw = db.prepare("SELECT * FROM instagram_publish_jobs WHERE id=?").get(id) as { account_id: string; content_id: string; content_version_id: string; status: PublishJobStatus; caption: string; carousel_container_id: string | null; next_poll_at: string | null } | undefined;
+  const raw = db.prepare("SELECT * FROM instagram_publish_jobs WHERE id=?").get(id) as { account_id: string; content_id: string; content_version_id: string; output_type: "INSTAGRAM_KR" | "INSTAGRAM_EN"; status: PublishJobStatus; caption: string; carousel_container_id: string | null; next_poll_at: string | null } | undefined;
   if (!raw) throw new Error("게시 작업을 찾을 수 없습니다.");
   if (["PUBLISHED", "FAILED"].includes(raw.status)) return getPublishJob(id)!;
   const account = getInstagramAccount();
@@ -146,8 +147,8 @@ export async function advancePublishJob(id: string): Promise<PublishJob> {
       try {
         db.prepare("UPDATE instagram_publish_jobs SET status='PUBLISHED', instagram_media_id=?, completed_at=?, next_poll_at=NULL WHERE id=?").run(result.mediaId, now, id);
         const job = getPublishJob(id)!;
-        db.prepare(`INSERT INTO instagram_published_posts (id, instagram_account_id, content_id, content_version_id, publish_job_id, instagram_media_id, permalink, caption, card_count, published_at, quality_score, brand_score, source_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PUBLISHED')`)
-          .run(randomUUID(), account.id, raw.content_id, raw.content_version_id, id, result.mediaId, result.permalink, raw.caption, assets.length, now, job.qualityScore, job.brandScore, raw.content_id);
+        db.prepare(`INSERT INTO instagram_published_posts (id, instagram_account_id, content_id, content_version_id, output_type, publish_job_id, instagram_media_id, permalink, caption, card_count, published_at, quality_score, brand_score, source_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PUBLISHED')`)
+          .run(randomUUID(), account.id, raw.content_id, raw.content_version_id, raw.output_type, id, result.mediaId, result.permalink, raw.caption, assets.length, now, job.qualityScore, job.brandScore, raw.content_id);
         db.exec("COMMIT");
       } catch (error) { db.exec("ROLLBACK"); throw error; }
     }
@@ -160,5 +161,5 @@ export async function advancePublishJob(id: string): Promise<PublishJob> {
 }
 
 export function listPublishedPosts() {
-  return getDatabase().prepare(`SELECT p.id, p.instagram_media_id mediaId, p.permalink, p.caption, p.card_count cardCount, p.published_at publishedAt, p.quality_score qualityScore, p.brand_score brandScore, p.status, a.username, c.original_title title, c.expert_name expertName FROM instagram_published_posts p JOIN instagram_accounts a ON a.id=p.instagram_account_id JOIN content_items c ON c.id=p.content_id ORDER BY p.published_at DESC`).all();
+  return getDatabase().prepare(`SELECT p.id, p.instagram_media_id mediaId, p.output_type outputType, p.permalink, p.caption, p.card_count cardCount, p.published_at publishedAt, p.quality_score qualityScore, p.brand_score brandScore, p.status, a.username, c.original_title title, c.expert_name expertName FROM instagram_published_posts p JOIN instagram_accounts a ON a.id=p.instagram_account_id JOIN content_items c ON c.id=p.content_id ORDER BY p.published_at DESC`).all();
 }

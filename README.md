@@ -73,7 +73,10 @@ npm run build
 3. 앱은 공식 API 또는 공식 공개 메타데이터를 우선 사용합니다. YouTube API 키가 없으면 oEmbed 최소 정보로 낮춰 동작하며, Instagram 본문·미디어에 권한이 없으면 링크 이상의 내용을 추측하지 않습니다.
 4. Source Accuracy에서 Metadata, Transcript, Visual Frames, Evidence Level(A~E), Confidence를 확인합니다.
 5. AI 분류 칩을 확정·추가·삭제·정렬하고 중요한 값은 잠급니다. 재분석해도 잠금 및 사용자 수정값은 보존됩니다.
-6. 생성 시 같은 Research Core를 사용하되 Naver KR, Instagram KR, English 콘텐츠는 각 플랫폼 문맥에 맞춰 별도로 작성됩니다.
+6. `어떤 콘텐츠를 만들까요?`에서 네이버 블로그 KR, Instagram KR, Instagram EN 중 하나 이상을 선택합니다.
+7. `선택한 콘텐츠 만들기`는 고른 엔진만 호출하고, `모두 만들기`는 세 엔진을 실행합니다. Source Analysis와 Research Core는 한 번만 공유합니다.
+8. Instagram EN은 Instagram KR 번역본이 아니라 Research Core에서 영어권 후크·비유·CTA·검색어·캡션을 독립 생성합니다.
+9. 각 출력은 별도 저장·버전 기록을 가지며, 분류를 수정한 뒤 변경을 반영할 출력만 다시 선택할 수 있습니다.
 
 업로드한 영상·오디오는 사용자가 소유하거나 분석 권한이 있는 파일만 사용해야 합니다. 현재 서버 전사는 지원하지만 프레임 추출기는 배포 환경의 영상 처리기 연결 전까지 `UNAVAILABLE`로 명확히 표시됩니다. 임의의 제3자 영상 다운로드나 비공식 자막 우회는 사용하지 않습니다.
 

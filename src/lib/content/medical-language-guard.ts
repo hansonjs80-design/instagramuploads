@@ -11,9 +11,7 @@ const prohibitedClaims = [
 ] as const;
 
 export function assertSafeMedicalLanguage(bundle: GeneratedBundle): void {
-  const output = JSON.stringify(bundle);
-  const found = prohibitedClaims.find((phrase) => output.includes(phrase));
-  if (found) throw new Error(`과장 또는 단정 표현이 감지되었습니다: ${found}`);
+  assertSafeMedicalOutput(bundle);
 
   const scores = bundle.blog.naverSeo.seoScore;
   const calculated =
@@ -34,4 +32,10 @@ export function assertSafeMedicalLanguage(bundle: GeneratedBundle): void {
       bundle.blog.naverSeo.readiness = "needs_revision";
     }
   }
+}
+
+export function assertSafeMedicalOutput(output: unknown): void {
+  const serialized = JSON.stringify(output);
+  const found = prohibitedClaims.find((phrase) => serialized.includes(phrase));
+  if (found) throw new Error(`과장 또는 단정 표현이 감지되었습니다: ${found}`);
 }

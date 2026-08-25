@@ -1,5 +1,3 @@
-import type { GeneratedBundle } from "@/lib/content/types";
-
 export class CopyrightGuardError extends Error {
   constructor(message: string) {
     super(message);
@@ -34,7 +32,7 @@ function collectNarrativeStrings(value: unknown, parentKey = ""): string[] {
 
 export function assertTransformativeOutput(
   originalScript: string,
-  bundle: GeneratedBundle,
+  bundle: unknown,
 ): void {
   const sourceTokens = tokenize(originalScript);
   if (sourceTokens.length < 12) return;
