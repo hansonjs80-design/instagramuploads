@@ -3,6 +3,8 @@
 ## Already Ready
 
 - Next.js App Router, TypeScript strict mode, responsive desktop-first shell
+- Production-only deployment is the current operating policy; a separate Preview environment is not required.
+- Production administrator login (`admin`) and authenticated PostgreSQL-backed dashboard access were verified on 2026-08-25.
 - Server-only OpenAI, Naver and Meta credentials
 - 1080x1350 browser rendering and local export
 - Instagram provider, Vercel Blob/local storage provider, auth provider boundaries
@@ -13,7 +15,6 @@
 
 - Production must provision Vercel Blob and configure `BLOB_READ_WRITE_TOKEN` (or add another provider adapter).
 - Meta App redirect URI and `APP_BASE_URL` must match the production domain exactly.
-- Preview must receive its own `DATABASE_URL`; Vercel does not copy a Production secret into Preview automatically.
 
 ## Production Blocker
 
