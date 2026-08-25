@@ -1,0 +1,12 @@
+/node_modules
+/.next
+/.data
+/.vercel
+/public/publish-assets
+/exports
+/.env*
+!/.env.local.example
+!/.env.example
+npm-debug.log*
+.DS_Store
+*.tsbuildinfo
